@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  hashedPassword String
+  name           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  settings       UserSettings?
+  passwordResets PasswordReset[]
+  plaidItems     PlaidItem[]
+  categories     Category[]
+  transactions   Transaction[]
+  corrections    CategoryCorrection[]
+  budgets            Budget[]
+  recurringPatterns  RecurringPattern[]
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model UserSettings {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  weekStartDay Int      @default(1) // 0=Sun, 1=Mon, ..., 6=Sat
+  currency     String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PlaidItem {
+  id                String   @id @default(uuid())
+  userId            String
+  plaidItemId       String   @unique
+  plaidAccessToken  String // Encrypted with AES-256-GCM
+  institutionId     String?
+  institutionName   String?
+  transactionCursor String? // For /transactions/sync pagination
+  status            String   @default("ACTIVE") // ACTIVE, ERROR, REVOKED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts PlaidAccount[]
+
+  @@index([userId])
+}
+
+model PlaidAccount {
+  id             String   @id @default(uuid())
+  plaidItemId    String
+  plaidAccountId String   @unique
+  name           String
+  officialName   String?
+  type           String // depository, credit, loan, etc.
+  subtype        String?
+  mask           String? // Last 4 digits
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  plaidItem    PlaidItem     @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([plaidItemId])
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  color     String   @default("#94a3b8")
+  icon      String   @default("Tag")
+  isDefault Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions         Transaction[]
+  budgets              Budget[]
+  recurringPatterns    RecurringPattern[]
+  correctionsOriginal  CategoryCorrection[] @relation("OriginalCategory")
+  correctionsCorrected CategoryCorrection[] @relation("CorrectedCategory")
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Transaction {
+  id                   String   @id @default(uuid())
+  userId               String
+  plaidAccountId       String?
+  plaidTransactionId   String?  @unique
+  categoryId           String?
+  amount               Decimal  @db.Decimal(12, 2)
+  merchantName         String?
+  originalName         String
+  date                 DateTime @db.Date // The authorized/transaction date (when the purchase happened)
+  postedDate           DateTime? @db.Date // The posted/cleared date (when the bank processed it)
+  originalCategory     String? // Category string from Plaid
+  isExcluded           Boolean  @default(false)
+  isPending            Boolean  @default(false)
+  pendingTransactionId String?
+  notes                String?
+  aiConfidence         Float?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plaidAccount PlaidAccount? @relation(fields: [plaidAccountId], references: [id], onDelete: SetNull)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@index([userId, categoryId])
+  @@index([plaidTransactionId])
+  @@index([userId, isExcluded])
+}
+
+model CategoryCorrection {
+  id                  String   @id @default(uuid())
+  userId              String
+  merchantName        String
+  originalName        String
+  originalCategoryId  String?
+  correctedCategoryId String
+  transactionAmount   Decimal  @db.Decimal(12, 2)
+  createdAt           DateTime @default(now())
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalCategory  Category? @relation("OriginalCategory", fields: [originalCategoryId], references: [id], onDelete: SetNull)
+  correctedCategory Category  @relation("CorrectedCategory", fields: [correctedCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([userId, merchantName])
+  @@index([userId, createdAt])
+}
+
+model Budget {
+  id         String   @id @default(uuid())
+  userId     String
+  categoryId String?
+  type       String // "WEEKLY" or "MONTHLY"
+  amount     Decimal  @db.Decimal(12, 2)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId, type])
+  @@index([userId, isActive])
+}
+
+model RecurringPattern {
+  id            String   @id @default(uuid())
+  userId        String
+  merchantName  String
+  amount        Decimal  @db.Decimal(12, 2)
+  frequency     String   // WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, YEARLY
+  confidence    Float    // 0-1 how confident we are this is recurring
+  detectionType String   // KNOWN_MERCHANT or PATTERN_DETECTED
+  lastSeen      DateTime @db.Date
+  nextExpected  DateTime? @db.Date
+  isActive      Boolean  @default(true)
+  isDismissed   Boolean  @default(false)
+  occurrences   Int      @default(1)
+  categoryId    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, merchantName, amount])
+  @@index([userId, isActive])
+}

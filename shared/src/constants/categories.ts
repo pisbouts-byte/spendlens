@@ -1,0 +1,16 @@
+export const DEFAULT_CATEGORIES = [
+  { name: "Groceries", color: "#22c55e", icon: "ShoppingCart" },
+  { name: "Dining", color: "#f97316", icon: "Utensils" },
+  { name: "Transportation", color: "#3b82f6", icon: "Car" },
+  { name: "Housing", color: "#8b5cf6", icon: "Home" },
+  { name: "Utilities", color: "#eab308", icon: "Zap" },
+  { name: "Entertainment", color: "#ec4899", icon: "Film" },
+  { name: "Shopping", color: "#14b8a6", icon: "ShoppingBag" },
+  { name: "Health", color: "#ef4444", icon: "Heart" },
+  { name: "Personal Care", color: "#f472b6", icon: "Scissors" },
+  { name: "Education", color: "#6366f1", icon: "GraduationCap" },
+  { name: "Travel", color: "#06b6d4", icon: "Plane" },
+  { name: "Subscriptions", color: "#a855f7", icon: "CreditCard" },
+  { name: "Income", color: "#10b981", icon: "DollarSign" },
+  { name: "Other", color: "#94a3b8", icon: "Tag" },
+] as const;
