@@ -8,9 +8,9 @@ echo "==> Installing dependencies..."
 pnpm install --frozen-lockfile
 
 echo "==> Generating Prisma client..."
-cd server && npx prisma generate && cd ..
+cd server && pnpm exec prisma generate && cd ..
 
 echo "==> Building shared package..."
-cd shared && npx tsc && cd ..
+cd shared && pnpm exec tsc && cd ..
 
 echo "==> Build complete (server runs via tsx, no tsc needed)"
