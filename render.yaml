@@ -7,9 +7,9 @@ services:
     buildCommand: |
       npm install -g pnpm@9 &&
       pnpm install --frozen-lockfile &&
+      cd server && npx prisma generate && cd .. &&
       pnpm --filter @spendlens/shared build &&
-      pnpm --filter @spendlens/server build &&
-      cd server && npx prisma generate
+      pnpm --filter @spendlens/server build
     startCommand: cd server && npx prisma migrate deploy && node dist/index.js
     envVars:
       - key: NODE_VERSION

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
-import { NotFoundError } from "../utils/errors.js";
+import { NotFoundError, BadRequestError } from "../utils/errors.js";
 
 // Known subscription merchants (lowercase for matching)
 const KNOWN_SUBSCRIPTION_MERCHANTS: Record<string, string> = {

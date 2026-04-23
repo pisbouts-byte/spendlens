@@ -12,7 +12,7 @@ export async function getRecurringPatterns(req: Request, res: Response, next: Ne
 
 export async function dismissPattern(req: Request, res: Response, next: NextFunction) {
   try {
-    await recurringService.dismissPattern(req.userId!, req.params.id);
+    await recurringService.dismissPattern(req.userId!, req.params.id as string);
     res.json({ success: true, data: { message: "Pattern dismissed" } });
   } catch (error) {
     next(error);
@@ -21,7 +21,7 @@ export async function dismissPattern(req: Request, res: Response, next: NextFunc
 
 export async function togglePatternActive(req: Request, res: Response, next: NextFunction) {
   try {
-    const pattern = await recurringService.togglePatternActive(req.userId!, req.params.id);
+    const pattern = await recurringService.togglePatternActive(req.userId!, req.params.id as string);
     res.json({ success: true, data: pattern });
   } catch (error) {
     next(error);
@@ -32,7 +32,7 @@ export async function updateFrequency(req: Request, res: Response, next: NextFun
   try {
     const pattern = await recurringService.updatePatternFrequency(
       req.userId!,
-      req.params.id,
+      req.params.id as string,
       req.body.frequency,
     );
     res.json({ success: true, data: pattern });

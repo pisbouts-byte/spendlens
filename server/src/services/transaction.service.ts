@@ -35,7 +35,7 @@ export async function getTransactions(userId: string, query: TransactionQuery) {
     ];
   }
 
-  const orderBy: Prisma.TransactionOrderByWithRelationInput = {
+  const orderBy: Record<string, string> = {
     [query.sortBy]: query.sortOrder,
   };
 
@@ -134,7 +134,7 @@ export async function bulkUpdateTransactions(
     throw new BadRequestError("Some transactions were not found");
   }
 
-  const data: Prisma.TransactionUncheckedUpdateManyInput = {};
+  const data: Record<string, unknown> = {};
   if (input.categoryId !== undefined) data.categoryId = input.categoryId;
   if (input.isExcluded !== undefined) data.isExcluded = input.isExcluded;
 
@@ -182,7 +182,7 @@ export async function exportTransactions(userId: string, query: TransactionQuery
   const result = await getTransactions(userId, modifiedQuery);
 
   const header = "Date,Merchant,Amount,Category,Excluded,Notes";
-  const rows = result.data.map((t) => {
+  const rows = result.data.map((t: { date: Date | string; merchantName: string | null; originalName: string; amount: { toString(): string }; category: { name: string } | null; isExcluded: boolean; notes: string | null }) => {
     const date = new Date(t.date).toISOString().split("T")[0];
     const merchant = csvEscape(t.merchantName || t.originalName);
     const amount = t.amount.toString();
