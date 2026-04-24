@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "turbo dev",
-    "build": "turbo build",
+    "build": "[ \"$RENDER\" = \"true\" ] && (cd server && ./node_modules/.bin/prisma generate && cd .. && cd shared && ./node_modules/.bin/tsc && cd ..) || turbo build",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
     "clean": "turbo clean"
