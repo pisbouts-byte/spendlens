@@ -274,7 +274,11 @@ Example: [{"transactionId":"abc","categoryId":"xyz","confidence":0.9}]`;
     if (errMsg.includes("invalid x-api-key") || errMsg.includes("authentication")) {
       throw new BadRequestError("AI categorization unavailable: Invalid Anthropic API key");
     }
-    return [];
+    if (errMsg.includes("overloaded") || errMsg.includes("rate_limit")) {
+      throw new BadRequestError("AI categorization unavailable: API rate limited. Try again in a minute.");
+    }
+    throw new BadRequestError(`AI categorization failed: ${errMsg || "Unknown error"}`);
+  }
   }
 }
 

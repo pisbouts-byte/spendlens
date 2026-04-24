@@ -262,8 +262,10 @@ export function TransactionsPage() {
       } else {
         const result = await transactionsApi.categorizeAllUncategorized();
         await fetchTransactions();
-        if (result.categorized === 0) {
+        if (result.total === 0) {
           toast("info", "No uncategorized transactions to process");
+        } else if (result.categorized === 0) {
+          toast("error", "AI categorization failed. Check your Anthropic API key and credits.");
         } else {
           toast("success", `Categorized ${result.categorized} of ${result.total} transactions`);
         }
