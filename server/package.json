@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon",
-    "build": "[ \"$RENDER\" = \"true\" ] && echo 'Skipping tsc on Render' || tsc",
+    "build": "[ \"$RENDER\" = \"true\" ] && (echo 'Skipping tsc on Render' && rm -rf node_modules/@spendlens/shared && mkdir -p node_modules/@spendlens/shared && cp ../shared/package.json node_modules/@spendlens/shared/ && cp -r ../shared/dist node_modules/@spendlens/shared/) || tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
