@@ -90,7 +90,7 @@ export function TransactionsPage() {
   const fetchTransactions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result: PaginatedResponse<Transaction> = await transactionsApi.getTransactions(filters);
+      const result = await transactionsApi.getTransactions(filters);
       setTransactions(result.data);
       setPagination(result.pagination);
       setUncategorizedCount(result.uncategorizedTotal ?? 0);
