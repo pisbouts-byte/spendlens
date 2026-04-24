@@ -279,7 +279,6 @@ Example: [{"transactionId":"abc","categoryId":"xyz","confidence":0.9}]`;
     }
     throw new BadRequestError(`AI categorization failed: ${errMsg || "Unknown error"}`);
   }
-  }
 }
 
 // Prisma Decimal type alias for readability
