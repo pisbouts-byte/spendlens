@@ -220,7 +220,7 @@ Example: [{"transactionId":"abc","categoryId":"xyz","confidence":0.9}]`;
 
   try {
     const message = await client.messages.create({
-      model: "claude-3-haiku-20240307",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     });
