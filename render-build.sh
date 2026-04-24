@@ -2,15 +2,20 @@
 set -e
 
 echo "==> Installing pnpm..."
-npm install -g pnpm@9
+npm install -g pnpm@10
 
-echo "==> Installing dependencies..."
+echo "==> Installing dependencies (clean)..."
+rm -rf node_modules server/node_modules shared/node_modules
 pnpm install --frozen-lockfile
 
+echo "==> Verifying Prisma version..."
+cd server
+./node_modules/.bin/prisma --version
 echo "==> Generating Prisma client..."
-cd server && pnpm exec prisma generate && cd ..
+./node_modules/.bin/prisma generate
+cd ..
 
 echo "==> Building shared package..."
 cd shared && pnpm exec tsc && cd ..
 
-echo "==> Build complete (server runs via tsx, no tsc needed)"
+echo "==> Build complete"
