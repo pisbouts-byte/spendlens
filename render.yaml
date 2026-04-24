@@ -4,12 +4,8 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: |
-      npm install -g pnpm@9 &&
-      pnpm install --frozen-lockfile &&
-      cd server && npx prisma generate && cd .. &&
-      pnpm --filter @spendlens/shared build
-    startCommand: cd server && npx prisma migrate deploy && npx tsx src/index.ts
+    buildCommand: chmod +x render-build.sh && ./render-build.sh
+    startCommand: cd server && ./node_modules/.bin/prisma migrate deploy && ./node_modules/.bin/tsx src/index.ts
     envVars:
       - key: NODE_VERSION
         value: "20"
