@@ -4,16 +4,20 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const isAndroid = process.argv.includes("android") || process.env.CAPACITOR_PLATFORM === "android";
 const devServerUrl = isAndroid ? "http://10.0.2.2:5173" : "http://localhost:5173";
 
+const useLiveReload = process.env.LIVE_RELOAD === "true";
+
 const config: CapacitorConfig = {
-  appId: "com.spendlens.app",
-  appName: "SpendLens",
+  appId: "com.pisbouts.budgetwisely",
+  appName: "BudgetWisely",
   webDir: "dist",
-  server: {
-    // For local development: load from Vite dev server for live reload
-    // Comment this out for production builds!
-    url: devServerUrl,
-    cleartext: true,
-  },
+  ...(useLiveReload
+    ? {
+        server: {
+          url: devServerUrl,
+          cleartext: true,
+        },
+      }
+    : {}),
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
@@ -33,7 +37,7 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: "automatic",
     preferredContentMode: "mobile",
-    scheme: "SpendLens",
+    scheme: "BudgetWisely",
   },
   android: {
     backgroundColor: "#f9fafb",

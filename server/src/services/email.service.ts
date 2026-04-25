@@ -41,7 +41,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     return false;
   }
 
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@spendlens.app";
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@budgetwisely.app";
 
   try {
     await transport.sendMail({
@@ -65,12 +65,12 @@ export async function sendPasswordResetEmail(
 ): Promise<boolean> {
   return sendEmail({
     to: email,
-    subject: "SpendLens - Reset Your Password",
+    subject: "Budget Wisely - Reset Your Password",
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
         <h2 style="color: #1e293b; margin-bottom: 16px;">Reset Your Password</h2>
         <p style="color: #475569; line-height: 1.6;">
-          You requested a password reset for your SpendLens account. Click the button below to set a new password.
+          You requested a password reset for your Budget Wisely account. Click the button below to set a new password.
         </p>
         <div style="text-align: center; margin: 32px 0;">
           <a href="${resetUrl}"
@@ -87,6 +87,6 @@ export async function sendPasswordResetEmail(
         </p>
       </div>
     `,
-    text: `Reset your SpendLens password by visiting this link: ${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+    text: `Reset your Budget Wisely password by visiting this link: ${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
   });
 }
