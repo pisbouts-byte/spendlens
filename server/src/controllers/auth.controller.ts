@@ -45,3 +45,12 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     next(error);
   }
 }
+
+export async function deleteAccount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await authService.deleteAccount(req.userId!);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}

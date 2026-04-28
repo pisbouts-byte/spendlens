@@ -32,4 +32,6 @@ router.post(
 
 router.get("/me", requireAuth, authController.getMe);
 
+router.delete("/account", requireAuth, authController.deleteAccount);
+
 export default router;

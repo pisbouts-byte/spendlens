@@ -43,3 +43,10 @@ export async function resetPassword(token: string, password: string) {
   );
   return res.data.data;
 }
+
+export async function deleteAccount() {
+  const res = await client.delete<ApiResponse<{ message: string }>>(
+    "/auth/account",
+  );
+  return res.data.data;
+}

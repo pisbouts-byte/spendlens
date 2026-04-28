@@ -174,3 +174,21 @@ export async function resetPassword(input: ResetPasswordInput) {
 
   return { message: "Password has been reset successfully" };
 }
+
+export async function deleteAccount(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new NotFoundError("User not found");
+  }
+
+  // Cascade deletes handle all related records (settings, categories,
+  // transactions, plaid items, budgets, recurring patterns, corrections, password resets)
+  await prisma.user.delete({
+    where: { id: userId },
+  });
+
+  return { message: "Account and all associated data have been permanently deleted" };
+}
