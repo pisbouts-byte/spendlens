@@ -162,6 +162,7 @@ export function ReportsPage() {
   }
 
   const totalSpent = categoryData.reduce((s, c) => s + c.total, 0);
+  const totalIncome = timeData.reduce((s, t) => s + t.income, 0);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -228,6 +229,26 @@ export function ReportsPage() {
             Today
           </button>
         )}
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Total Spending
+          </p>
+          <p className="mt-1.5 text-2xl font-bold text-gray-900">
+            {formatCurrency(totalSpent)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Total Income
+          </p>
+          <p className="mt-1.5 text-2xl font-bold text-green-600">
+            {formatCurrency(totalIncome)}
+          </p>
+        </div>
       </div>
 
       {/* Spending Trend */}

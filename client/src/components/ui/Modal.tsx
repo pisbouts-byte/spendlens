@@ -45,13 +45,13 @@ export function Modal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
     >
       <div
-        className={`w-full ${sizes[size]} rounded-t-xl bg-white shadow-xl animate-slide-up sm:rounded-xl sm:mx-4 max-h-[90vh] flex flex-col`}
+        className={`w-full ${sizes[size]} rounded-xl bg-white shadow-xl animate-slide-up max-h-[80vh] flex flex-col`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"

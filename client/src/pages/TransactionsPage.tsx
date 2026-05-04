@@ -64,6 +64,9 @@ export function TransactionsPage() {
 
   // AI categorization
   const [isCategorizing, setIsCategorizing] = useState(false);
+  const [showAiWarning, setShowAiWarning] = useState(false);
+
+  const AI_WARNED_KEY = "bw_ai_categorize_warned";
 
   // Debounce search
   useEffect(() => {
@@ -250,7 +253,7 @@ export function TransactionsPage() {
   }
 
   // AI Categorization
-  async function handleCategorize() {
+  async function runCategorize() {
     setIsCategorizing(true);
     try {
       if (selectedIds.size > 0) {
@@ -275,6 +278,20 @@ export function TransactionsPage() {
     } finally {
       setIsCategorizing(false);
     }
+  }
+
+  function handleCategorize() {
+    if (!localStorage.getItem(AI_WARNED_KEY)) {
+      setShowAiWarning(true);
+    } else {
+      runCategorize();
+    }
+  }
+
+  function handleAiWarningConfirm() {
+    localStorage.setItem(AI_WARNED_KEY, "1");
+    setShowAiWarning(false);
+    runCategorize();
   }
 
   // Export
@@ -886,6 +903,42 @@ export function TransactionsPage() {
           </div>
         )}
       </div>
+      {/* AI First-run Warning Dialog */}
+      {showAiWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <Sparkles className="h-6 w-6 text-amber-500 shrink-0" />
+              <h3 className="text-base font-semibold text-gray-900">
+                Before you start AI categorization
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              AI categorization processes transactions in batches using Claude AI.
+              Based on testing, expect roughly{" "}
+              <span className="font-semibold text-gray-800">1 minute per 100 transactions</span>.
+            </p>
+            <p className="mt-2 text-sm text-gray-500">
+              The app will show a loading indicator while it runs — please keep
+              the screen open until it completes.
+            </p>
+            <div className="mt-5 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowAiWarning(false)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAiWarningConfirm}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              >
+                Proceed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
