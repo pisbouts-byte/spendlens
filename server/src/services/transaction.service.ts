@@ -195,6 +195,46 @@ export async function exportTransactions(userId: string, query: TransactionQuery
   return [header, ...rows].join("\n");
 }
 
+export async function applyRules(userId: string): Promise<{ applied: number }> {
+  // Build merchant → most-recent-correction map
+  const corrections = await prisma.categoryCorrection.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Keep only the latest correction per merchant name (case-insensitive)
+  const ruleMap = new Map<string, string>(); // merchantKey -> categoryId
+  for (const c of corrections) {
+    const key = c.merchantName.toLowerCase();
+    if (!ruleMap.has(key)) {
+      ruleMap.set(key, c.correctedCategoryId);
+    }
+  }
+
+  if (ruleMap.size === 0) return { applied: 0 };
+
+  // Find all uncategorized transactions for this user
+  const uncategorized = await prisma.transaction.findMany({
+    where: { userId, categoryId: null },
+    select: { id: true, merchantName: true, originalName: true },
+  });
+
+  let applied = 0;
+  for (const txn of uncategorized) {
+    const merchantKey = (txn.merchantName || txn.originalName).toLowerCase();
+    const categoryId = ruleMap.get(merchantKey);
+    if (categoryId) {
+      await prisma.transaction.update({
+        where: { id: txn.id },
+        data: { categoryId },
+      });
+      applied++;
+    }
+  }
+
+  return { applied };
+}
+
 function csvEscape(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
     return `"${value.replace(/"/g, '""')}"`;

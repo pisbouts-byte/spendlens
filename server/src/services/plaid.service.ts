@@ -9,6 +9,7 @@ import { prisma } from "../config/prisma.js";
 import { env } from "../config/env.js";
 import { encrypt, decrypt } from "../utils/encryption.js";
 import { NotFoundError, BadRequestError } from "../utils/errors.js";
+import { applyRules } from "./transaction.service.js";
 
 const plaidEnvMap: Record<string, string> = {
   sandbox: PlaidEnvironments.sandbox,
@@ -198,6 +199,11 @@ export async function syncTransactions(userId: string, itemId: string) {
     where: { id: itemId },
     data: { transactionCursor: cursor },
   });
+
+  // Auto-apply saved merchant rules to any newly added uncategorized transactions
+  if (addedCount > 0) {
+    await applyRules(userId);
+  }
 
   return { added: addedCount, modified: modifiedCount, removed: removedCount };
 }

@@ -8,6 +8,8 @@ import {
   AlertTriangle,
   Pause,
   Play,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type {
   Budget,
@@ -24,6 +26,26 @@ import { Spinner } from "../components/ui/Spinner.tsx";
 import { Modal } from "../components/ui/Modal.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
 
+function getOffsetDate(type: "MONTHLY" | "WEEKLY", offset: number): { date: Date; label: string } {
+  const now = new Date();
+  if (type === "MONTHLY") {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 15);
+    return {
+      date: d,
+      label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    };
+  }
+  // WEEKLY — shift by offset * 7 days
+  const d = new Date(now);
+  d.setDate(now.getDate() + offset * 7);
+  const weekStart = new Date(d);
+  weekStart.setDate(d.getDate() - d.getDay() + 1); // approximate; server computes exact bounds
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  const label = `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  return { date: d, label };
+}
+
 export function BudgetsPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -31,6 +53,7 @@ export function BudgetsPage() {
   const [progress, setProgress] = useState<BudgetProgress[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [viewType, setViewType] = useState<"MONTHLY" | "WEEKLY">("MONTHLY");
+  const [periodOffset, setPeriodOffset] = useState(0);
 
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -42,12 +65,17 @@ export function BudgetsPage() {
   const [formType, setFormType] = useState<"MONTHLY" | "WEEKLY">("MONTHLY");
   const [formAmount, setFormAmount] = useState("");
 
+  const { date: periodDate, label: periodLabel } = getOffsetDate(viewType, periodOffset);
+
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [budgetData, progressData, categoryData] = await Promise.all([
         budgetsApi.getBudgets(),
-        budgetsApi.getBudgetProgress({ type: viewType }),
+        budgetsApi.getBudgetProgress({
+          type: viewType,
+          date: periodDate.toISOString().split("T")[0],
+        }),
         categoriesApi.getCategories(),
       ]);
       setBudgets(budgetData);
@@ -63,6 +91,11 @@ export function BudgetsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  function handleViewTypeChange(type: "MONTHLY" | "WEEKLY") {
+    setViewType(type);
+    setPeriodOffset(0);
+  }
 
   function openCreateModal() {
     setFormCategoryId("");
@@ -224,28 +257,57 @@ export function BudgetsPage() {
         </div>
       </div>
 
-      {/* View toggle */}
-      <div className="mt-6 flex items-center gap-2">
-        <button
-          onClick={() => setViewType("MONTHLY")}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-            viewType === "MONTHLY"
-              ? "bg-brand-600 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
-        >
-          Monthly
-        </button>
-        <button
-          onClick={() => setViewType("WEEKLY")}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-            viewType === "WEEKLY"
-              ? "bg-brand-600 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
-        >
-          Weekly
-        </button>
+      {/* View toggle + period navigation */}
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleViewTypeChange("MONTHLY")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewType === "MONTHLY"
+                ? "bg-brand-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => handleViewTypeChange("WEEKLY")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewType === "WEEKLY"
+                ? "bg-brand-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Weekly
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1 ml-auto">
+          <button
+            onClick={() => setPeriodOffset((o) => o - 1)}
+            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="min-w-[160px] text-center text-sm font-medium text-gray-700">
+            {periodLabel}
+          </span>
+          <button
+            onClick={() => setPeriodOffset((o) => o + 1)}
+            disabled={periodOffset >= 0}
+            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          {periodOffset !== 0 && (
+            <button
+              onClick={() => setPeriodOffset(0)}
+              className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
+            >
+              Current
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Budget progress list */}
@@ -472,7 +534,7 @@ export function BudgetsPage() {
                   <option value="">Overall Spending (all categories)</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.icon} {c.name}
+                      {c.name}
                     </option>
                   ))}
                 </select>

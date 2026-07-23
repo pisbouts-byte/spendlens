@@ -94,6 +94,13 @@ export async function bulkDeleteTransactions(transactionIds: string[]): Promise<
   return data.data;
 }
 
+export async function applyRules(): Promise<{ applied: number }> {
+  const { data } = await client.post<ApiResponse<{ applied: number }>>(
+    "/transactions/apply-rules",
+  );
+  return data.data;
+}
+
 export function getExportUrl(filters: TransactionFilters = {}): string {
   const params = new URLSearchParams(
     Object.fromEntries(

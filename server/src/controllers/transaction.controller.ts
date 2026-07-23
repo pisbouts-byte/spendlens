@@ -86,6 +86,15 @@ export async function categorizeAll(req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function applyRules(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await transactionService.applyRules(req.userId!);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function exportTransactions(req: Request, res: Response, next: NextFunction) {
   try {
     const csv = await transactionService.exportTransactions(req.userId!, req.query as never);

@@ -19,6 +19,7 @@ import { Button } from "../components/ui/Button.tsx";
 import { Spinner } from "../components/ui/Spinner.tsx";
 import { getApiUrl } from "../api/config.ts";
 import * as dashboardApi from "../api/dashboard.ts";
+import * as settingsApi from "../api/settings.ts";
 import type {
   SpendingByCategory,
   SpendingOverTime,
@@ -27,7 +28,7 @@ import type {
 
 type Period = "week" | "month" | "quarter" | "year";
 
-function getPeriodDates(period: Period, offset: number): { startDate: string; endDate: string; label: string } {
+function getPeriodDates(period: Period, offset: number, weekStartDay: number): { startDate: string; endDate: string; label: string } {
   const now = new Date();
   let start: Date;
   let end: Date;
@@ -36,12 +37,13 @@ function getPeriodDates(period: Period, offset: number): { startDate: string; en
   switch (period) {
     case "week": {
       const dayOfWeek = now.getDay();
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const thisMonday = new Date(now);
-      thisMonday.setDate(now.getDate() + mondayOffset);
-      thisMonday.setHours(0, 0, 0, 0);
+      let diff = dayOfWeek - weekStartDay;
+      if (diff < 0) diff += 7;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - diff);
+      weekStart.setHours(0, 0, 0, 0);
 
-      start = new Date(thisMonday);
+      start = new Date(weekStart);
       start.setDate(start.getDate() + offset * 7);
       end = new Date(start);
       end.setDate(start.getDate() + 6);
@@ -103,17 +105,22 @@ function formatCurrency(value: string | number): string {
 export function ReportsPage() {
   const [period, setPeriod] = useState<Period>("month");
   const [offset, setOffset] = useState(0);
+  const [weekStartDay, setWeekStartDay] = useState(1); // default Monday until settings load
   const [isLoading, setIsLoading] = useState(true);
   const [categoryData, setCategoryData] = useState<(Omit<SpendingByCategory, "total"> & { total: number })[]>([]);
   const [timeData, setTimeData] = useState<{ period: string; total: number; income: number }[]>([]);
   const [merchants, setMerchants] = useState<(Omit<TopMerchant, "total"> & { total: number })[]>([]);
+
+  useEffect(() => {
+    settingsApi.getSettings().then((s) => setWeekStartDay(s.weekStartDay)).catch(() => {});
+  }, []);
 
   function handlePeriodChange(newPeriod: Period) {
     setPeriod(newPeriod);
     setOffset(0);
   }
 
-  const { startDate, endDate, label: periodLabel } = getPeriodDates(period, offset);
+  const { startDate, endDate, label: periodLabel } = getPeriodDates(period, offset, weekStartDay);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);

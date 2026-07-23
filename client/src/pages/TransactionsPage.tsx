@@ -65,6 +65,7 @@ export function TransactionsPage() {
   // AI categorization
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [showAiWarning, setShowAiWarning] = useState(false);
+  const [isApplyingRules, setIsApplyingRules] = useState(false);
 
   const AI_WARNED_KEY = "bw_ai_categorize_warned";
 
@@ -294,6 +295,23 @@ export function TransactionsPage() {
     runCategorize();
   }
 
+  async function handleApplyRules() {
+    setIsApplyingRules(true);
+    try {
+      const result = await transactionsApi.applyRules();
+      await fetchTransactions();
+      if (result.applied === 0) {
+        toast("info", "No matches found — categorize some transactions first to build rules");
+      } else {
+        toast("success", `Applied saved rules to ${result.applied} transaction${result.applied !== 1 ? "s" : ""}`);
+      }
+    } catch {
+      toast("error", "Failed to apply rules");
+    } finally {
+      setIsApplyingRules(false);
+    }
+  }
+
   // Export
   function handleExport() {
     const url = transactionsApi.getExportUrl(filters);
@@ -355,9 +373,21 @@ export function TransactionsPage() {
           <Button
             variant="secondary"
             size="sm"
+            onClick={handleApplyRules}
+            isLoading={isApplyingRules}
+            disabled={isApplyingRules || isCategorizing}
+            title="Apply saved merchant rules to uncategorized transactions"
+          >
+            <Tag className="mr-1.5 h-4 w-4" />
+            <span className="hidden sm:inline">Apply Rules</span>
+            <span className="sm:hidden">Rules</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleCategorize}
             isLoading={isCategorizing}
-            disabled={isCategorizing}
+            disabled={isCategorizing || isApplyingRules}
           >
             <Sparkles className="mr-1.5 h-4 w-4" />
             <span className="hidden sm:inline">AI Categorize</span>

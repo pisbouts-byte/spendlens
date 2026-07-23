@@ -45,5 +45,6 @@ router.delete("/:id", transactionController.deleteTransaction);
 
 router.post("/categorize", transactionController.categorize);
 router.post("/categorize-all", transactionController.categorizeAll);
+router.post("/apply-rules", transactionController.applyRules);
 
 export default router;
