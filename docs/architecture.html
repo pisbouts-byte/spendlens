@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Budget Wisely — Architecture</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+    .diagram {
+      background: white;
+      border-radius: 20px;
+      padding: 44px 48px 48px;
+      width: 860px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .diagram-title {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 8px;
+      letter-spacing: -0.3px;
+    }
+    .diagram-subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 40px;
+    }
+
+    /* ── Zones ───────────────────────────────────────── */
+    .zone {
+      border-radius: 14px;
+      padding: 18px 20px 20px;
+      margin-bottom: 0;
+      position: relative;
+    }
+    .zone-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .zone-mobile   { background: #eff6ff; border: 1.5px solid #bfdbfe; }
+    .zone-backend  { background: #f0fdf4; border: 1.5px solid #bbf7d0; }
+    .zone-services { background: #faf5ff; border: 1.5px solid #e9d5ff; }
+    .zone-mobile .zone-label   { color: #2563eb; }
+    .zone-backend .zone-label  { color: #16a34a; }
+    .zone-services .zone-label { color: #7c3aed; }
+
+    /* ── Connector arrows between zones ─────────────── */
+    .connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 36px;
+      gap: 8px;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .connector svg { flex-shrink: 0; }
+
+    /* ── Boxes inside zones ──────────────────────────── */
+    .boxes {
+      display: flex;
+      gap: 16px;
+      align-items: stretch;
+    }
+    .box {
+      flex: 1;
+      background: white;
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .box-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+    .box-icon-blue   { background: #dbeafe; }
+    .box-icon-green  { background: #dcfce7; }
+    .box-icon-purple { background: #ede9fe; }
+    .box-icon-orange { background: #ffedd5; }
+    .box-icon-teal   { background: #ccfbf1; }
+
+    .box-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+    .box-sub {
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    .box-tag {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+    }
+    .tag-blue   { background: #dbeafe; color: #1d4ed8; }
+    .tag-green  { background: #dcfce7; color: #15803d; }
+    .tag-purple { background: #ede9fe; color: #6d28d9; }
+    .tag-orange { background: #ffedd5; color: #c2410c; }
+    .tag-teal   { background: #ccfbf1; color: #0f766e; }
+
+    /* ── Side-by-side connectors inside service zone ── */
+    .service-row {
+      display: flex;
+      gap: 16px;
+    }
+    .service-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sub-box {
+      background: #faf5ff;
+      border: 1px solid #e9d5ff;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .sub-box-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #6d28d9;
+      margin-bottom: 2px;
+    }
+    .sub-box-text {
+      font-size: 10.5px;
+      color: #7c3aed;
+      line-height: 1.4;
+    }
+    .sub-box-green {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+    }
+    .sub-box-green .sub-box-title { color: #15803d; }
+    .sub-box-green .sub-box-text  { color: #16a34a; }
+
+    /* ── Vertical connector within a column ─────────── */
+    .mini-connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 14px;
+    }
+
+  </style>
+</head>
+<body>
+<div class="diagram">
+
+  <div class="diagram-title">Budget Wisely — System Architecture</div>
+  <div class="diagram-subtitle">React · Capacitor · Node/Express · PostgreSQL · Plaid · Anthropic API</div>
+
+  <!-- ── MOBILE ZONE ─────────────────────────────────── -->
+  <div class="zone zone-mobile">
+    <div class="zone-label">Mobile</div>
+    <div class="boxes">
+      <div class="box" style="flex:2">
+        <div class="box-icon box-icon-blue">📱</div>
+        <div class="box-title">iOS App</div>
+        <div class="box-sub">React frontend wrapped in Capacitor — runs as a native iOS app distributed through the App Store</div>
+        <span class="box-tag tag-blue">Capacitor 8 · React · Tailwind</span>
+      </div>
+      <div class="box" style="flex:1">
+        <div class="box-icon box-icon-blue">🏦</div>
+        <div class="box-title">Plaid Link</div>
+        <div class="box-sub">Secure in-app bank connection flow. Credentials never touch our servers.</div>
+        <span class="box-tag tag-blue">Plaid SDK</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- connector -->
+  <div class="connector">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+    HTTPS / REST API
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 5 19 12"/></svg>
+  </div>
+
+  <!-- ── BACKEND ZONE ────────────────────────────────── -->
+  <div class="zone zone-backend">
+    <div class="zone-label">Backend — Render</div>
+    <div class="boxes">
+      <div class="box" style="flex:2">
+        <div class="box-icon box-icon-green">⚙️</div>
+        <div class="box-title">Node / Express API</div>
+        <div class="box-sub">Authentication · Transaction sync · Budget logic · AI categorization · Recurring detection · CSV export · Webhook handling</div>
+        <span class="box-tag tag-green">TypeScript · Prisma ORM</span>
+      </div>
+      <div class="box" style="flex:1">
+        <div class="box-icon box-icon-teal">🗄️</div>
+        <div class="box-title">PostgreSQL</div>
+        <div class="box-sub">Users · Transactions · Categories · Budgets · Recurring patterns · Plaid tokens (AES-256 encrypted)</div>
+        <span class="box-tag tag-teal">Prisma · pg 16</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- connector -->
+  <div class="connector">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+    External service calls
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 5 19 12"/></svg>
+  </div>
+
+  <!-- ── SERVICES ZONE ───────────────────────────────── -->
+  <div class="zone zone-services">
+    <div class="zone-label">External Services</div>
+    <div class="service-row">
+
+      <!-- Plaid col -->
+      <div class="service-col">
+        <div class="box">
+          <div class="box-icon box-icon-orange">🔗</div>
+          <div class="box-title">Plaid API</div>
+          <div class="box-sub">Secure bank connectivity. Syncs transactions, accounts, and balances via access tokens stored encrypted server-side.</div>
+          <span class="box-tag tag-orange">OAuth · Webhooks</span>
+        </div>
+        <div class="sub-box sub-box-green">
+          <div class="sub-box-title">Connected Bank Accounts</div>
+          <div class="sub-box-text">Checking · Savings · Credit cards — any institution supported by Plaid</div>
+        </div>
+      </div>
+
+      <!-- Anthropic col -->
+      <div class="service-col">
+        <div class="box">
+          <div class="box-icon box-icon-purple">✨</div>
+          <div class="box-title">Anthropic API</div>
+          <div class="box-sub">Claude powers two AI features — both run server-side. Transaction data is never used to train models.</div>
+          <span class="box-tag tag-purple">Claude · claude-sonnet-4</span>
+        </div>
+        <div class="sub-box">
+          <div class="sub-box-title">Transaction Categorization</div>
+          <div class="sub-box-text">Reads full transaction description to assign the right category — distinguishes same-merchant charges by context</div>
+        </div>
+        <div class="sub-box">
+          <div class="sub-box-title">Recurring Charge Detection</div>
+          <div class="sub-box-text">Identifies subscriptions by pattern analysis and merchant knowledge; scores each by confidence</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

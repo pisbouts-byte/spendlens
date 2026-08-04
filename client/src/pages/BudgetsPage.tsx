@@ -20,6 +20,7 @@ import type {
 import { BudgetType } from "@spendlens/shared";
 import * as budgetsApi from "../api/budgets.ts";
 import * as categoriesApi from "../api/categories.ts";
+import BudgetPlugin from "../plugins/BudgetPlugin.ts";
 import { Button } from "../components/ui/Button.tsx";
 import { CategoryIcon } from "../components/ui/CategoryIcon.tsx";
 import { Spinner } from "../components/ui/Spinner.tsx";
@@ -81,6 +82,16 @@ export function BudgetsPage() {
       setBudgets(budgetData);
       setProgress(progressData);
       setCategories(categoryData);
+
+      // Push totals to the iOS widget via App Group
+      const totalBudgeted = progressData.reduce((s, p) => s + parseFloat(p.budget.amount), 0);
+      const totalSpent = progressData.reduce((s, p) => s + parseFloat(p.spent), 0);
+      BudgetPlugin.updateWidgetData({
+        type: viewType,
+        totalBudgeted,
+        totalSpent,
+        periodLabel: getOffsetDate(viewType, periodOffset).label,
+      }).catch(() => {}); // no-op on web/Android
     } catch {
       toast("error", "Failed to load budgets");
     } finally {
