@@ -21,9 +21,14 @@ struct BudgetEntity: AppEntity {
 
     var id: String
     var name: String
+    var type: String // "MONTHLY", "WEEKLY", or "" for the all-budgets sentinel
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(name)")
+        if type.isEmpty {
+            return DisplayRepresentation(title: "\(name)")
+        }
+        let label = type == "WEEKLY" ? "Weekly" : "Monthly"
+        return DisplayRepresentation(title: "\(name)", subtitle: "\(label)")
     }
 }
 
@@ -39,13 +44,13 @@ struct BudgetEntityQuery: EntityQuery {
     }
 
     private func allEntities() -> [BudgetEntity] {
-        var results = [BudgetEntity(id: "__all__", name: "All Budgets")]
+        var results = [BudgetEntity(id: "__all__", name: "All Budgets", type: "")]
         guard let defaults = UserDefaults(suiteName: suiteName),
               let data = defaults.data(forKey: "bw_budgets"),
               let items = try? JSONDecoder().decode([BudgetWidgetItem].self, from: data) else {
             return results
         }
-        results += items.map { BudgetEntity(id: $0.id, name: $0.name) }
+        results += items.map { BudgetEntity(id: $0.id, name: $0.name, type: $0.type) }
         return results
     }
 }
