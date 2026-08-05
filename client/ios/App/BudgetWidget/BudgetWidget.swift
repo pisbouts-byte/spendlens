@@ -65,6 +65,43 @@ struct SelectBudgetIntent: WidgetConfigurationIntent {
     var budget: BudgetEntity?
 }
 
+// MARK: - API response decoders (mirrors BudgetProgress from shared types)
+
+private struct ApiResponse<T: Decodable>: Decodable {
+    let data: T
+}
+
+private struct ApiCategory: Decodable {
+    let name: String
+}
+
+private struct ApiBudget: Decodable {
+    let id: String
+    let type: String
+    let amount: String
+    let category: ApiCategory?
+}
+
+private struct ApiProgress: Decodable {
+    let budget: ApiBudget
+    let spent: String
+    let periodStart: String
+}
+
+private func periodLabel(from start: String, type budgetType: String) -> String {
+    let df = DateFormatter()
+    df.dateFormat = "yyyy-MM-dd"
+    guard let date = df.date(from: start) else { return "—" }
+    if budgetType == "WEEKLY" {
+        let end = Calendar.current.date(byAdding: .day, value: 6, to: date) ?? date
+        let s = DateFormatter(); s.dateFormat = "MMM d"
+        let e = DateFormatter(); e.dateFormat = "MMM d, yyyy"
+        return "\(s.string(from: date)) – \(e.string(from: end))"
+    }
+    let fmt = DateFormatter(); fmt.dateFormat = "MMMM yyyy"
+    return fmt.string(from: date)
+}
+
 // MARK: - Timeline entry
 
 struct BudgetEntry: TimelineEntry {
@@ -91,9 +128,67 @@ struct BudgetProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectBudgetIntent, in context: Context) async -> Timeline<BudgetEntry> {
+        await refreshCache(for: configuration)
         let entry = loadEntry(for: configuration)
         let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date())!
         return Timeline(entries: [entry], policy: .after(next))
+    }
+
+    // Fetches fresh data from the API and updates the App Group cache.
+    // Silently does nothing on network failure so stale cache is used instead.
+    private func refreshCache(for configuration: SelectBudgetIntent) async {
+        let defaults = UserDefaults(suiteName: suiteName)
+        guard let token = defaults?.string(forKey: "bw_authToken"), !token.isEmpty,
+              let apiUrl = defaults?.string(forKey: "bw_apiUrl"), !apiUrl.isEmpty else { return }
+
+        let budgetType: String
+        if let selected = configuration.budget, selected.id != "__all__", !selected.type.isEmpty {
+            budgetType = selected.type
+        } else {
+            budgetType = "MONTHLY"
+        }
+
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let today = df.string(from: Date())
+
+        guard let url = URL(string: "\(apiUrl)/budgets/progress?type=\(budgetType)&date=\(today)") else { return }
+
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+
+            let result = try JSONDecoder().decode(ApiResponse<[ApiProgress]>.self, from: data)
+
+            let items = result.data.map { p in
+                BudgetWidgetItem(
+                    id: p.budget.id,
+                    name: p.budget.category?.name ?? "Overall Spending",
+                    budgeted: Double(p.budget.amount) ?? 0,
+                    spent: Double(p.spent) ?? 0,
+                    type: p.budget.type,
+                    periodLabel: periodLabel(from: p.periodStart, type: p.budget.type)
+                )
+            }
+
+            let totalBudgeted = items.reduce(0.0) { $0 + $1.budgeted }
+            let totalSpent    = items.reduce(0.0) { $0 + $1.spent }
+            let label         = items.first?.periodLabel ?? "—"
+
+            if let encoded = try? JSONEncoder().encode(items) {
+                defaults?.set(encoded, forKey: "bw_budgets")
+            }
+            defaults?.set(totalBudgeted, forKey: "bw_totalBudgeted")
+            defaults?.set(totalSpent,    forKey: "bw_totalSpent")
+            defaults?.set(label,         forKey: "bw_periodLabel")
+            defaults?.set(budgetType,    forKey: "bw_type")
+            defaults?.synchronize()
+        } catch {
+            // Network or parse failure — stale cache will be used
+        }
     }
 
     private func loadEntry(for configuration: SelectBudgetIntent) -> BudgetEntry {

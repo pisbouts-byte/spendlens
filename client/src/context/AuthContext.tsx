@@ -6,6 +6,8 @@ import {
   type ReactNode,
 } from "react";
 import * as authApi from "../api/auth.ts";
+import BudgetPlugin from "../plugins/BudgetPlugin.ts";
+import { getApiUrl } from "../api/config.ts";
 
 interface AuthUser {
   id: string;
@@ -32,20 +34,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
+      BudgetPlugin.setAuthToken({ token: "", apiUrl: "" }).catch(() => {});
       setIsLoading(false);
       return;
     }
 
+    BudgetPlugin.setAuthToken({ token, apiUrl: getApiUrl() }).catch(() => {});
+
     authApi
       .getMe()
       .then((u) => setUser(u))
-      .catch(() => localStorage.removeItem(TOKEN_KEY))
+      .catch(() => {
+        localStorage.removeItem(TOKEN_KEY);
+        BudgetPlugin.setAuthToken({ token: "", apiUrl: "" }).catch(() => {});
+      })
       .finally(() => setIsLoading(false));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const result = await authApi.loginUser({ email, password });
     localStorage.setItem(TOKEN_KEY, result.token);
+    BudgetPlugin.setAuthToken({ token: result.token, apiUrl: getApiUrl() }).catch(() => {});
     setUser(result.user);
   }, []);
 
@@ -53,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, name?: string) => {
       const result = await authApi.registerUser({ email, password, name });
       localStorage.setItem(TOKEN_KEY, result.token);
+      BudgetPlugin.setAuthToken({ token: result.token, apiUrl: getApiUrl() }).catch(() => {});
       setUser(result.user);
     },
     [],
@@ -60,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
+    BudgetPlugin.setAuthToken({ token: "", apiUrl: "" }).catch(() => {});
     setUser(null);
   }, []);
 

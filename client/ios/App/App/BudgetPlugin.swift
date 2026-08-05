@@ -8,6 +8,7 @@ public class BudgetPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "Budget"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "updateWidgetData", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setAuthToken", returnType: CAPPluginReturnPromise),
     ]
 
     private let suiteName = "group.com.pisbouts.budgetwisely"
@@ -38,6 +39,25 @@ public class BudgetPlugin: CAPPlugin, CAPBridgedPlugin {
 
         WidgetCenter.shared.reloadAllTimelines()
 
+        call.resolve()
+    }
+
+    @objc func setAuthToken(_ call: CAPPluginCall) {
+        let token  = call.getString("token") ?? ""
+        let apiUrl = call.getString("apiUrl") ?? ""
+
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            call.reject("App Group not configured")
+            return
+        }
+
+        if token.isEmpty {
+            defaults.removeObject(forKey: "bw_authToken")
+        } else {
+            defaults.set(token,  forKey: "bw_authToken")
+            defaults.set(apiUrl, forKey: "bw_apiUrl")
+        }
+        defaults.synchronize()
         call.resolve()
     }
 }

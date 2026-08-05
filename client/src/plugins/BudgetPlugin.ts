@@ -17,6 +17,7 @@ export interface BudgetPluginInterface {
     periodLabel: string;
     budgets: BudgetItem[];
   }): Promise<void>;
+  setAuthToken(options: { token: string; apiUrl: string }): Promise<void>;
 }
 
 const BudgetPlugin = registerPlugin<BudgetPluginInterface>("Budget");
