@@ -152,7 +152,8 @@ struct BudgetProvider: AppIntentTimelineProvider {
         df.dateFormat = "yyyy-MM-dd"
         let today = df.string(from: Date())
 
-        guard let url = URL(string: "\(apiUrl)/budgets/progress?type=\(budgetType)&date=\(today)") else { return }
+        guard let url = URL(string: "\(apiUrl)/budgets/progress?type=\(budgetType)&date=\(today)"),
+              url.scheme == "http" || url.scheme == "https" else { return }
 
         var request = URLRequest(url: url, timeoutInterval: 10)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
