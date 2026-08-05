@@ -28,6 +28,12 @@ public class BudgetPlugin: CAPPlugin, CAPBridgedPlugin {
         defaults.set(totalSpent, forKey: "bw_totalSpent")
         defaults.set(periodLabel, forKey: "bw_periodLabel")
         defaults.set(ISO8601DateFormatter().string(from: Date()), forKey: "bw_updatedAt")
+
+        if let budgets = call.getArray("budgets") as? [[String: Any]],
+           let data = try? JSONSerialization.data(withJSONObject: budgets) {
+            defaults.set(data, forKey: "bw_budgets")
+        }
+
         defaults.synchronize()
 
         WidgetCenter.shared.reloadAllTimelines()

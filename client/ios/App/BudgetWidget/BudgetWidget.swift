@@ -1,7 +1,66 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
 
-// MARK: - Data model
+// MARK: - Budget item model (matches what BudgetPlugin writes)
+
+struct BudgetWidgetItem: Codable {
+    let id: String
+    let name: String
+    let budgeted: Double
+    let spent: Double
+    let type: String
+    let periodLabel: String
+}
+
+// MARK: - AppEntity for budget picker
+
+struct BudgetEntity: AppEntity {
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Budget"
+    static var defaultQuery = BudgetEntityQuery()
+
+    var id: String
+    var name: String
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(name)")
+    }
+}
+
+struct BudgetEntityQuery: EntityQuery {
+    private let suiteName = "group.com.pisbouts.budgetwisely"
+
+    func entities(for identifiers: [String]) async throws -> [BudgetEntity] {
+        allEntities().filter { identifiers.contains($0.id) }
+    }
+
+    func suggestedEntities() async throws -> [BudgetEntity] {
+        allEntities()
+    }
+
+    private func allEntities() -> [BudgetEntity] {
+        var results = [BudgetEntity(id: "__all__", name: "All Budgets")]
+        guard let defaults = UserDefaults(suiteName: suiteName),
+              let data = defaults.data(forKey: "bw_budgets"),
+              let items = try? JSONDecoder().decode([BudgetWidgetItem].self, from: data) else {
+            return results
+        }
+        results += items.map { BudgetEntity(id: $0.id, name: $0.name) }
+        return results
+    }
+}
+
+// MARK: - Configuration intent
+
+struct SelectBudgetIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Select Budget"
+    static var description = IntentDescription("Choose which budget to display.")
+
+    @Parameter(title: "Budget")
+    var budget: BudgetEntity?
+}
+
+// MARK: - Timeline entry
 
 struct BudgetEntry: TimelineEntry {
     let date: Date
@@ -9,35 +68,54 @@ struct BudgetEntry: TimelineEntry {
     let totalSpent: Double
     let periodLabel: String
     let type: String
+    let budgetName: String
 }
 
 // MARK: - Timeline provider
 
-struct BudgetProvider: TimelineProvider {
+struct BudgetProvider: AppIntentTimelineProvider {
     private let suiteName = "group.com.pisbouts.budgetwisely"
 
     func placeholder(in context: Context) -> BudgetEntry {
-        BudgetEntry(date: Date(), totalBudgeted: 2000, totalSpent: 1240, periodLabel: "May 2026", type: "MONTHLY")
+        BudgetEntry(date: Date(), totalBudgeted: 2000, totalSpent: 1240,
+                    periodLabel: "August 2026", type: "MONTHLY", budgetName: "All Budgets")
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (BudgetEntry) -> Void) {
-        completion(loadEntry())
+    func snapshot(for configuration: SelectBudgetIntent, in context: Context) async -> BudgetEntry {
+        loadEntry(for: configuration)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<BudgetEntry>) -> Void) {
-        let entry = loadEntry()
-        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date())!
-        completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
+    func timeline(for configuration: SelectBudgetIntent, in context: Context) async -> Timeline<BudgetEntry> {
+        let entry = loadEntry(for: configuration)
+        let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date())!
+        return Timeline(entries: [entry], policy: .after(next))
     }
 
-    private func loadEntry() -> BudgetEntry {
+    private func loadEntry(for configuration: SelectBudgetIntent) -> BudgetEntry {
         let defaults = UserDefaults(suiteName: suiteName)
+        let selectedId = configuration.budget?.id
+
+        if let selectedId, selectedId != "__all__",
+           let data = defaults?.data(forKey: "bw_budgets"),
+           let items = try? JSONDecoder().decode([BudgetWidgetItem].self, from: data),
+           let item = items.first(where: { $0.id == selectedId }) {
+            return BudgetEntry(
+                date: Date(),
+                totalBudgeted: item.budgeted,
+                totalSpent:    item.spent,
+                periodLabel:   item.periodLabel,
+                type:          item.type,
+                budgetName:    item.name
+            )
+        }
+
         return BudgetEntry(
             date: Date(),
             totalBudgeted: defaults?.double(forKey: "bw_totalBudgeted") ?? 0,
             totalSpent:    defaults?.double(forKey: "bw_totalSpent")    ?? 0,
             periodLabel:   defaults?.string(forKey: "bw_periodLabel")   ?? "—",
-            type:          defaults?.string(forKey: "bw_type")          ?? "MONTHLY"
+            type:          defaults?.string(forKey: "bw_type")          ?? "MONTHLY",
+            budgetName:    "All Budgets"
         )
     }
 }
@@ -71,9 +149,6 @@ struct SmallBudgetView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [brandBlue, brandBlueDark],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-
             if entry.totalBudgeted == 0 {
                 VStack(spacing: 6) {
                     Image(systemName: "chart.bar.fill")
@@ -85,9 +160,10 @@ struct SmallBudgetView: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        Text("Budget Wisely")
+                        Text(entry.budgetName)
                             .font(.caption2).fontWeight(.semibold)
                             .foregroundColor(.white.opacity(0.65))
+                            .lineLimit(1)
                         Spacer()
                         Text(entry.type == "MONTHLY" ? "Monthly" : "Weekly")
                             .font(.caption2).foregroundColor(.white.opacity(0.65))
@@ -143,9 +219,6 @@ struct MediumBudgetView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [brandBlue, brandBlueDark],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-
             if entry.totalBudgeted == 0 {
                 VStack(spacing: 8) {
                     Image(systemName: "chart.bar.fill")
@@ -157,11 +230,11 @@ struct MediumBudgetView: View {
                 .padding()
             } else {
                 HStack(spacing: 16) {
-                    // Left: amounts
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("Budget Wisely")
+                        Text(entry.budgetName)
                             .font(.caption2).fontWeight(.semibold)
                             .foregroundColor(.white.opacity(0.65))
+                            .lineLimit(1)
 
                         Spacer()
 
@@ -187,13 +260,11 @@ struct MediumBudgetView: View {
                             .padding(.top, 5)
                     }
 
-                    // Divider
                     Rectangle()
                         .fill(Color.white.opacity(0.2))
                         .frame(width: 1)
                         .padding(.vertical, 8)
 
-                    // Right: stats
                     VStack(alignment: .leading, spacing: 10) {
                         statRow(
                             icon: isOver ? "exclamationmark.circle.fill" : "checkmark.circle.fill",
@@ -261,16 +332,15 @@ struct BudgetWidget: Widget {
     let kind = "BudgetWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: BudgetProvider()) { entry in
-            if #available(iOS 17.0, *) {
-                BudgetWidgetEntryView(entry: entry)
-                    .containerBackground(.fill.tertiary, for: .widget)
-            } else {
-                BudgetWidgetEntryView(entry: entry)
-            }
+        AppIntentConfiguration(kind: kind, intent: SelectBudgetIntent.self, provider: BudgetProvider()) { entry in
+            BudgetWidgetEntryView(entry: entry)
+                .containerBackground(for: .widget) {
+                    LinearGradient(colors: [brandBlue, brandBlueDark],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
         }
         .configurationDisplayName("Budget Tracker")
-        .description("See your monthly or weekly budget progress at a glance.")
+        .description("See your budget progress at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

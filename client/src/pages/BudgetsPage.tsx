@@ -83,14 +83,23 @@ export function BudgetsPage() {
       setProgress(progressData);
       setCategories(categoryData);
 
-      // Push totals to the iOS widget via App Group
+      // Push totals + individual budgets to the iOS widget via App Group
       const totalBudgeted = progressData.reduce((s, p) => s + parseFloat(p.budget.amount), 0);
       const totalSpent = progressData.reduce((s, p) => s + parseFloat(p.spent), 0);
+      const currentPeriodLabel = getOffsetDate(viewType, periodOffset).label;
       BudgetPlugin.updateWidgetData({
         type: viewType,
         totalBudgeted,
         totalSpent,
-        periodLabel: getOffsetDate(viewType, periodOffset).label,
+        periodLabel: currentPeriodLabel,
+        budgets: progressData.map((p) => ({
+          id: p.budget.id,
+          name: p.budget.category?.name ?? "Overall Spending",
+          budgeted: parseFloat(p.budget.amount),
+          spent: parseFloat(p.spent),
+          type: viewType,
+          periodLabel: currentPeriodLabel,
+        })),
       }).catch(() => {}); // no-op on web/Android
     } catch {
       toast("error", "Failed to load budgets");
