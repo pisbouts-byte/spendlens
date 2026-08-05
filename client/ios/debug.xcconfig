@@ -1,1 +1,4 @@
 CAPACITOR_DEBUG = true
+// Ensure App Groups entitlement is embedded in Simulator builds
+CODE_SIGN_IDENTITY[sdk=iphonesimulator*] = -
+ENTITLEMENTS_ALLOWED[sdk=iphonesimulator*] = YES
