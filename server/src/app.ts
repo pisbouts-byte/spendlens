@@ -1,5 +1,3 @@
-import path from "path";
-import { fileURLToPath } from "url";
 import express, { type Express } from "express";
 import cors from "cors";
 import morgan from "morgan";
@@ -36,15 +34,5 @@ app.use(morgan("dev"));
 app.use("/api", routes);
 
 app.use(errorHandler);
-
-// In production, serve the client build
-if (process.env.NODE_ENV === "production") {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const clientDist = path.join(__dirname, "../../client/dist");
-  app.use(express.static(clientDist));
-  app.get("*", (_req, res) => {
-    res.sendFile(path.join(clientDist, "index.html"));
-  });
-}
 
 export default app;

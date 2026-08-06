@@ -32,11 +32,27 @@ const plaidClient = new PlaidApi(configuration);
 export async function createLinkToken(userId: string) {
   const response = await plaidClient.linkTokenCreate({
     user: { client_user_id: userId },
-    client_name: "SpendLens",
+    client_name: "BudgetWisely",
     products: [Products.Transactions],
     country_codes: [CountryCode.Us],
     language: "en",
     webhook: env.PLAID_WEBHOOK_URL || undefined,
+  });
+
+  return { linkToken: response.data.link_token };
+}
+
+export async function createUpdateLinkToken(userId: string, itemId: string) {
+  const plaidItem = await prisma.plaidItem.findFirst({ where: { id: itemId, userId } });
+  if (!plaidItem) throw new NotFoundError("Plaid item");
+
+  const accessToken = decrypt(plaidItem.plaidAccessToken);
+  const response = await plaidClient.linkTokenCreate({
+    user: { client_user_id: userId },
+    client_name: "BudgetWisely",
+    access_token: accessToken,
+    country_codes: [CountryCode.Us],
+    language: "en",
   });
 
   return { linkToken: response.data.link_token };
@@ -66,6 +82,8 @@ export async function exchangeToken(
       status: "ACTIVE",
     },
   });
+
+  await ensureWebhookRegistered(plaidItem);
 
   // Fetch and store accounts
   const accountsResponse = await plaidClient.accountsGet({
@@ -99,6 +117,19 @@ export async function exchangeToken(
   return { plaidItem, accounts };
 }
 
+async function ensureWebhookRegistered(plaidItem: { id: string; plaidAccessToken: string; webhookUrl: string | null }) {
+  const targetUrl = env.PLAID_WEBHOOK_URL || null;
+  if (!targetUrl || plaidItem.webhookUrl === targetUrl) return;
+
+  const accessToken = decrypt(plaidItem.plaidAccessToken);
+  try {
+    await plaidClient.itemWebhookUpdate({ access_token: accessToken, webhook: targetUrl });
+    await prisma.plaidItem.update({ where: { id: plaidItem.id }, data: { webhookUrl: targetUrl } });
+  } catch (err) {
+    console.error(`Failed to register webhook for item ${plaidItem.id}:`, err instanceof Error ? err.message : err);
+  }
+}
+
 export async function syncTransactions(userId: string, itemId: string) {
   const plaidItem = await prisma.plaidItem.findFirst({
     where: { id: itemId, userId },
@@ -113,6 +144,8 @@ export async function syncTransactions(userId: string, itemId: string) {
     throw new BadRequestError("Plaid item is not active");
   }
 
+  await ensureWebhookRegistered(plaidItem);
+
   const accessToken = decrypt(plaidItem.plaidAccessToken);
   let cursor = plaidItem.transactionCursor ?? undefined;
   let hasMore = true;
@@ -126,7 +159,8 @@ export async function syncTransactions(userId: string, itemId: string) {
     plaidItem.accounts.map((a) => [a.plaidAccountId, a.id]),
   );
 
-  while (hasMore) {
+  try {
+   while (hasMore) {
     const response = await plaidClient.transactionsSync({
       access_token: accessToken,
       cursor,
@@ -192,6 +226,13 @@ export async function syncTransactions(userId: string, itemId: string) {
 
     cursor = next_cursor;
     hasMore = has_more;
+   }
+  } catch (err: unknown) {
+    const code = (err as { response?: { data?: { error_code?: string } } })?.response?.data?.error_code;
+    if (code === "ITEM_LOGIN_REQUIRED" || code === "ITEM_NOT_FOUND") {
+      await prisma.plaidItem.update({ where: { id: itemId }, data: { status: "ERROR" } });
+    }
+    throw err;
   }
 
   // Update cursor
@@ -206,6 +247,17 @@ export async function syncTransactions(userId: string, itemId: string) {
   }
 
   return { added: addedCount, modified: modifiedCount, removed: removedCount };
+}
+
+export async function reconnectItem(userId: string, itemId: string) {
+  const plaidItem = await prisma.plaidItem.findFirst({ where: { id: itemId, userId } });
+  if (!plaidItem) throw new NotFoundError("Plaid item");
+
+  await prisma.plaidItem.update({ where: { id: itemId }, data: { status: "ACTIVE", webhookUrl: null } });
+  const updated = await prisma.plaidItem.findUniqueOrThrow({ where: { id: itemId } });
+  await ensureWebhookRegistered(updated);
+  const result = await syncTransactions(userId, itemId);
+  return result;
 }
 
 export async function syncAllItems(userId: string) {

@@ -71,6 +71,20 @@ export async function getAccounts(): Promise<PlaidItemWithAccounts[]> {
   return data.data;
 }
 
+export async function createUpdateLinkToken(itemId: string): Promise<string> {
+  const { data } = await client.post<ApiResponse<LinkTokenResponse>>(
+    `/plaid/create-update-link-token/${itemId}`,
+  );
+  return data.data.linkToken;
+}
+
+export async function reconnectItem(itemId: string): Promise<SyncResult> {
+  const { data } = await client.post<ApiResponse<SyncResult>>(
+    `/plaid/reconnect/${itemId}`,
+  );
+  return data.data;
+}
+
 export async function removeItem(itemId: string): Promise<void> {
   await client.delete(`/plaid/items/${itemId}`);
 }

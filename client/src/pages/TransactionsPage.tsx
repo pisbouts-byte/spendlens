@@ -454,6 +454,7 @@ export function TransactionsPage() {
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500 sm:w-auto"
         >
           <option value="">All Accounts</option>
+          <option value="unlinked">Unlinked</option>
           {accounts.flatMap((item) =>
             item.accounts.map((acc) => (
               <option key={acc.id} value={acc.id}>

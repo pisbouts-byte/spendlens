@@ -19,7 +19,9 @@ export async function getTransactions(userId: string, query: TransactionQuery) {
   if (query.categoryId) {
     where.categoryId = query.categoryId === "uncategorized" ? null : query.categoryId;
   }
-  if (query.accountId) {
+  if (query.accountId === "unlinked") {
+    where.plaidAccountId = null;
+  } else if (query.accountId) {
     where.plaidAccountId = query.accountId;
   }
   if (query.isExcluded === "true") {

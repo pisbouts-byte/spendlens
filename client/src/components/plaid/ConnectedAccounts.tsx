@@ -13,6 +13,7 @@ import { Badge } from "../ui/Badge.tsx";
 import { Button } from "../ui/Button.tsx";
 import { useToast } from "../ui/Toast.tsx";
 import { PlaidLinkButton } from "./PlaidLinkButton.tsx";
+import { ReconnectButton } from "./ReconnectButton.tsx";
 
 export function ConnectedAccounts() {
   const { toast } = useToast();
@@ -166,9 +167,12 @@ export function ConnectedAccounts() {
               </div>
 
               {item.status !== "ACTIVE" && (
-                <div className="flex items-center gap-2 bg-red-50 px-5 py-2 text-sm text-red-700">
-                  <AlertCircle className="h-4 w-4" />
-                  Connection error. Please reconnect this account.
+                <div className="flex items-center justify-between gap-2 bg-red-50 px-5 py-2 text-sm text-red-700">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    Your bank session has expired. Reconnect to resume syncing.
+                  </div>
+                  <ReconnectButton itemId={item.id} onSuccess={fetchAccounts} />
                 </div>
               )}
 

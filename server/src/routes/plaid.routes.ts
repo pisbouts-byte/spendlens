@@ -11,7 +11,9 @@ router.post("/webhooks", plaidController.handleWebhook);
 router.use(requireAuth);
 
 router.post("/create-link-token", plaidController.createLinkToken);
+router.post("/create-update-link-token/:itemId", plaidController.createUpdateLinkToken);
 router.post("/exchange-token", plaidController.exchangeToken);
+router.post("/reconnect/:itemId", plaidController.reconnectItem);
 router.post("/sync/:itemId", plaidController.syncTransactions);
 router.post("/sync-all", plaidController.syncAll);
 router.get("/accounts", plaidController.getAccounts);

@@ -10,6 +10,24 @@ export async function createLinkToken(req: Request, res: Response, next: NextFun
   }
 }
 
+export async function createUpdateLinkToken(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await plaidService.createUpdateLinkToken(req.userId!, req.params.itemId as string);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function reconnectItem(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await plaidService.reconnectItem(req.userId!, req.params.itemId as string);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function exchangeToken(req: Request, res: Response, next: NextFunction) {
   try {
     const { publicToken, institutionId, institutionName } = req.body;
