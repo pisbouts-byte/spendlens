@@ -2,7 +2,8 @@
 set -e
 
 echo "==> Installing pnpm..."
-npm install -g pnpm@10
+corepack enable
+corepack prepare pnpm@10 --activate
 
 echo "==> Installing dependencies (skipping postinstall scripts)..."
 rm -rf node_modules server/node_modules shared/node_modules

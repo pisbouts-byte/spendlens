@@ -2,7 +2,8 @@
 set -e
 
 echo "==> Installing pnpm..."
-npm install -g pnpm@10
+corepack enable
+corepack prepare pnpm@10 --activate
 
 echo "==> Installing dependencies..."
 pnpm install --frozen-lockfile --ignore-scripts
