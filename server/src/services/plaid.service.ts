@@ -130,7 +130,7 @@ async function ensureWebhookRegistered(plaidItem: { id: string; plaidAccessToken
   }
 }
 
-export async function syncTransactions(userId: string, itemId: string) {
+export async function syncTransactions(userId: string, itemId: string, trigger: "manual" | "webhook" | "auto" | "background" = "manual") {
   const plaidItem = await prisma.plaidItem.findFirst({
     where: { id: itemId, userId },
     include: { accounts: true },
@@ -232,6 +232,18 @@ export async function syncTransactions(userId: string, itemId: string) {
     if (code === "ITEM_LOGIN_REQUIRED" || code === "ITEM_NOT_FOUND") {
       await prisma.plaidItem.update({ where: { id: itemId }, data: { status: "ERROR" } });
     }
+    await prisma.syncLog.create({
+      data: {
+        userId,
+        plaidItemId: itemId,
+        trigger,
+        added: addedCount,
+        modified: modifiedCount,
+        removed: removedCount,
+        status: "ERROR",
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
     throw err;
   }
 
@@ -239,6 +251,10 @@ export async function syncTransactions(userId: string, itemId: string) {
   await prisma.plaidItem.update({
     where: { id: itemId },
     data: { transactionCursor: cursor },
+  });
+
+  await prisma.syncLog.create({
+    data: { userId, plaidItemId: itemId, trigger, added: addedCount, modified: modifiedCount, removed: removedCount, status: "SUCCESS" },
   });
 
   // Auto-apply saved merchant rules to any newly added uncategorized transactions
@@ -256,7 +272,7 @@ export async function reconnectItem(userId: string, itemId: string) {
   await prisma.plaidItem.update({ where: { id: itemId }, data: { status: "ACTIVE", webhookUrl: null } });
   const updated = await prisma.plaidItem.findUniqueOrThrow({ where: { id: itemId } });
   await ensureWebhookRegistered(updated);
-  const result = await syncTransactions(userId, itemId);
+  const result = await syncTransactions(userId, itemId, "manual");
   return result;
 }
 
@@ -268,7 +284,7 @@ export async function syncAllItems(userId: string) {
   const results = [];
   for (const item of items) {
     try {
-      const result = await syncTransactions(userId, item.id);
+      const result = await syncTransactions(userId, item.id, "manual");
       results.push({ itemId: item.id, ...result });
     } catch (error) {
       results.push({
@@ -294,7 +310,7 @@ export async function syncAllActiveItems() {
 
   for (const item of items) {
     try {
-      const result = await syncTransactions(item.userId, item.id);
+      const result = await syncTransactions(item.userId, item.id, "auto");
       totalAdded += result.added;
       totalModified += result.modified;
       totalRemoved += result.removed;
@@ -360,7 +376,7 @@ export async function handleWebhook(body: {
     });
 
     if (plaidItem && plaidItem.status === "ACTIVE") {
-      await syncTransactions(plaidItem.userId, plaidItem.id);
+      await syncTransactions(plaidItem.userId, plaidItem.id, "webhook");
     }
   }
 

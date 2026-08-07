@@ -1,49 +1,71 @@
 import UIKit
 import Capacitor
+import BackgroundTasks
+import WidgetKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
+    private let suiteName  = "group.com.pisbouts.budgetwisely"
+    private let syncTaskId = "com.pisbouts.budgetwisely.sync"
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: syncTaskId, using: nil) { task in
+            self.handleBackgroundSync(task: task as! BGAppRefreshTask)
+        }
         return true
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-    }
-
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+        scheduleBackgroundSync()
     }
 
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
+    // MARK: - Background sync
+
+    private func scheduleBackgroundSync() {
+        let request = BGAppRefreshTaskRequest(identifier: syncTaskId)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        try? BGTaskScheduler.shared.submit(request)
     }
 
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+    private func handleBackgroundSync(task: BGAppRefreshTask) {
+        scheduleBackgroundSync() // reschedule immediately so next wakeup is already queued
+
+        guard let defaults = UserDefaults(suiteName: suiteName),
+              let token  = defaults.string(forKey: "bw_authToken"), !token.isEmpty,
+              let apiUrl = defaults.string(forKey: "bw_apiUrl"),    !apiUrl.isEmpty,
+              let url    = URL(string: "\(apiUrl)/plaid/sync-all") else {
+            task.setTaskCompleted(success: false)
+            return
+        }
+
+        var request = URLRequest(url: url, timeoutInterval: 25)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let urlTask = URLSession.shared.dataTask(with: request) { _, _, error in
+            WidgetCenter.shared.reloadAllTimelines()
+            task.setTaskCompleted(success: error == nil)
+        }
+
+        task.expirationHandler = {
+            urlTask.cancel()
+            task.setTaskCompleted(success: false)
+        }
+
+        urlTask.resume()
     }
 
-    func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
-    }
+    // MARK: - Capacitor passthrough
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        // Called when the app was launched with a url. Feel free to add additional processing here,
-        // but if you want the App API to support tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-        // Called when the app was launched with an activity, including Universal Links.
-        // Feel free to add additional processing here, but if you want the App API to support
-        // tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
-
 }

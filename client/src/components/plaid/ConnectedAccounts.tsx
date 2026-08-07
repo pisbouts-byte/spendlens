@@ -5,9 +5,12 @@ import {
   RefreshCw,
   Trash2,
   AlertCircle,
+  History,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import * as plaidApi from "../../api/plaid.ts";
-import type { PlaidItemWithAccounts } from "../../api/plaid.ts";
+import type { PlaidItemWithAccounts, SyncLogEntry } from "../../api/plaid.ts";
 import { Card } from "../ui/Card.tsx";
 import { Badge } from "../ui/Badge.tsx";
 import { Button } from "../ui/Button.tsx";
@@ -20,6 +23,9 @@ export function ConnectedAccounts() {
   const [items, setItems] = useState<PlaidItemWithAccounts[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -63,6 +69,23 @@ export function ConnectedAccounts() {
     }
   }
 
+  async function handleToggleHistory() {
+    if (showHistory) {
+      setShowHistory(false);
+      return;
+    }
+    setShowHistory(true);
+    setLoadingLogs(true);
+    try {
+      const logs = await plaidApi.getSyncLogs(50);
+      setSyncLogs(logs);
+    } catch {
+      toast("error", "Failed to load sync history");
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+
   async function handleRemove(itemId: string, name: string) {
     if (!confirm(`Disconnect ${name}? Synced transactions will be kept.`)) {
       return;
@@ -97,15 +120,25 @@ export function ConnectedAccounts() {
         </div>
         <div className="flex gap-2">
           {items.length > 0 && (
-            <Button
-              variant="secondary"
-              onClick={handleSyncAll}
-              isLoading={syncing === "all"}
-              disabled={syncing !== null}
-            >
-              <RefreshCw className="mr-1.5 h-4 w-4" />
-              Sync All
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={handleToggleHistory}
+              >
+                <History className="mr-1.5 h-4 w-4" />
+                History
+                {showHistory ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleSyncAll}
+                isLoading={syncing === "all"}
+                disabled={syncing !== null}
+              >
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+                Sync All
+              </Button>
+            </>
           )}
           <PlaidLinkButton onSuccess={fetchAccounts} />
         </div>
@@ -201,6 +234,63 @@ export function ConnectedAccounts() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {showHistory && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-sm font-semibold text-gray-700">Sync History</h2>
+          {loadingLogs ? (
+            <div className="rounded-xl border border-gray-200 bg-white py-8 text-center text-sm text-gray-400">
+              Loading…
+            </div>
+          ) : syncLogs.length === 0 ? (
+            <div className="rounded-xl border border-gray-200 bg-white py-8 text-center text-sm text-gray-400">
+              No syncs recorded yet
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50 text-left text-gray-500">
+                    <th className="px-4 py-2 font-medium">Time</th>
+                    <th className="px-4 py-2 font-medium">Account</th>
+                    <th className="px-4 py-2 font-medium">Trigger</th>
+                    <th className="px-4 py-2 font-medium text-center">Status</th>
+                    <th className="px-4 py-2 font-medium text-right">+Added</th>
+                    <th className="px-4 py-2 font-medium text-right">~Modified</th>
+                    <th className="px-4 py-2 font-medium text-right">−Removed</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {syncLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50" title={log.error ?? undefined}>
+                      <td className="whitespace-nowrap px-4 py-2 text-gray-500">
+                        {new Date(log.createdAt).toLocaleString("en-US", {
+                          month: "short", day: "numeric",
+                          hour: "numeric", minute: "2-digit",
+                        })}
+                      </td>
+                      <td className="px-4 py-2 text-gray-600">
+                        {log.plaidItem.institutionName ?? "—"}
+                      </td>
+                      <td className="px-4 py-2 capitalize text-gray-500">{log.trigger}</td>
+                      <td className="px-4 py-2 text-center">
+                        {log.status === "SUCCESS" ? (
+                          <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-green-700">OK</span>
+                        ) : (
+                          <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-red-700" title={log.error ?? undefined}>Error</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right text-green-600">+{log.added}</td>
+                      <td className="px-4 py-2 text-right text-gray-500">~{log.modified}</td>
+                      <td className="px-4 py-2 text-right text-red-500">−{log.removed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

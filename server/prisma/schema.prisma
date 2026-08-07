@@ -23,6 +23,7 @@ model User {
   corrections    CategoryCorrection[]
   budgets            Budget[]
   recurringPatterns  RecurringPattern[]
+  syncLogs           SyncLog[]
 }
 
 model PasswordReset {
@@ -58,14 +59,35 @@ model PlaidItem {
   institutionId     String?
   institutionName   String?
   transactionCursor String? // For /transactions/sync pagination
+  webhookUrl        String? // Webhook URL currently registered with Plaid
   status            String   @default("ACTIVE") // ACTIVE, ERROR, REVOKED
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   accounts PlaidAccount[]
+  syncLogs SyncLog[]
 
   @@index([userId])
+}
+
+model SyncLog {
+  id          String   @id @default(uuid())
+  userId      String
+  plaidItemId String
+  trigger     String   // "manual", "webhook", "auto", "background"
+  added       Int      @default(0)
+  modified    Int      @default(0)
+  removed     Int      @default(0)
+  status      String   // "SUCCESS", "ERROR"
+  error       String?
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plaidItem PlaidItem @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([plaidItemId, createdAt])
 }
 
 model PlaidAccount {

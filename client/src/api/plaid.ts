@@ -85,6 +85,26 @@ export async function reconnectItem(itemId: string): Promise<SyncResult> {
   return data.data;
 }
 
+export interface SyncLogEntry {
+  id: string;
+  plaidItemId: string;
+  trigger: string;
+  added: number;
+  modified: number;
+  removed: number;
+  status: "SUCCESS" | "ERROR";
+  error: string | null;
+  createdAt: string;
+  plaidItem: { institutionName: string | null };
+}
+
+export async function getSyncLogs(limit = 50): Promise<SyncLogEntry[]> {
+  const { data } = await client.get<ApiResponse<SyncLogEntry[]>>(
+    `/plaid/sync-logs?limit=${limit}`,
+  );
+  return data.data;
+}
+
 export async function removeItem(itemId: string): Promise<void> {
   await client.delete(`/plaid/items/${itemId}`);
 }

@@ -6,6 +6,13 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@spendlens/client", "dev"],
       "port": 5173
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4444"],
+      "cwd": "/Users/philipisbouts/Documents/Development/spendlens/docs",
+      "port": 4444
     }
   ]
 }

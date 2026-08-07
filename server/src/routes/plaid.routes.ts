@@ -17,6 +17,7 @@ router.post("/reconnect/:itemId", plaidController.reconnectItem);
 router.post("/sync/:itemId", plaidController.syncTransactions);
 router.post("/sync-all", plaidController.syncAll);
 router.get("/accounts", plaidController.getAccounts);
+router.get("/sync-logs", plaidController.getSyncLogs);
 router.delete("/items/:itemId", plaidController.removeItem);
 
 export default router;

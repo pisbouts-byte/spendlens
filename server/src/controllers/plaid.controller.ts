@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import * as plaidService from "../services/plaid.service.js";
+import { prisma } from "../config/prisma.js";
 
 export async function createLinkToken(req: Request, res: Response, next: NextFunction) {
   try {
@@ -77,6 +78,21 @@ export async function removeItem(req: Request, res: Response, next: NextFunction
   try {
     await plaidService.removeItem(req.userId!, req.params.itemId as string);
     res.json({ success: true, data: { deleted: true } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getSyncLogs(req: Request, res: Response, next: NextFunction) {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const logs = await prisma.syncLog.findMany({
+      where: { userId: req.userId! },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: { plaidItem: { select: { institutionName: true } } },
+    });
+    res.json({ success: true, data: logs });
   } catch (error) {
     next(error);
   }
