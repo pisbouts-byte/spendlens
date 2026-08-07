@@ -2,8 +2,8 @@
 set -e
 
 echo "==> Installing pnpm..."
-corepack enable
-corepack prepare pnpm@10 --activate
+npm install -g pnpm@10 --prefix="$HOME/.npm-global"
+export PATH="$HOME/.npm-global/bin:$PATH"
 
 echo "==> Installing dependencies..."
 pnpm install --frozen-lockfile --ignore-scripts
