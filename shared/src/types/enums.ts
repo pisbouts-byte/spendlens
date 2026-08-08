@@ -26,3 +26,18 @@ export enum RecurringFrequency {
   QUARTERLY = "QUARTERLY",
   YEARLY = "YEARLY",
 }
+
+export enum CashFlowType {
+  INCOME = "INCOME",
+  BILL = "BILL",
+}
+
+export enum CashFlowFrequency {
+  ONE_TIME = "ONE_TIME",
+  WEEKLY = "WEEKLY",
+  BIWEEKLY = "BIWEEKLY",
+  MONTHLY = "MONTHLY",
+  QUARTERLY = "QUARTERLY",
+  SEMIANNUALLY = "SEMIANNUALLY",
+  YEARLY = "YEARLY",
+}

@@ -7,6 +7,7 @@ import transactionRoutes from "./transaction.routes.js";
 import budgetRoutes from "./budget.routes.js";
 import dashboardRoutes from "./dashboard.routes.js";
 import recurringRoutes from "./recurring.routes.js";
+import cashflowRoutes from "./cashflow.routes.js";
 
 const router: RouterType = Router();
 
@@ -22,5 +23,6 @@ router.use("/transactions", transactionRoutes);
 router.use("/budgets", budgetRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/recurring", recurringRoutes);
+router.use("/cashflow", cashflowRoutes);
 
 export default router;

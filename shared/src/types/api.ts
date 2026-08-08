@@ -59,3 +59,51 @@ export interface RecurringSummary {
   monthlyTotal: string;
   yearlyTotal: string;
 }
+
+export interface CashFlowBalance {
+  balance: string | null;
+  asOf: string | null;
+}
+
+export interface CashFlowEvent {
+  date: string;
+  cashFlowItemId: string;
+  name: string;
+  type: "INCOME" | "BILL";
+  amount: string;
+  isOverridden: boolean;
+}
+
+export interface CashFlowSnapshot {
+  label: "endOfMonth" | "endOfYear" | "oneYearOut";
+  date: string;
+  endingBalance: string;
+  netChange: string;
+}
+
+export interface CashFlowAlert {
+  startDate: string;
+  endDate: string | null;
+  lowestBalance: string;
+  lowestBalanceDate: string;
+  events: CashFlowEvent[];
+}
+
+export interface CashFlowMonthSummary {
+  month: string; // YYYY-MM
+  totalIncome: string;
+  totalBills: string;
+  net: string;
+  endingBalance: string;
+}
+
+export interface CashFlowForecast {
+  balanceConfigured: boolean;
+  startingBalance: string;
+  asOf: string | null;
+  isStale: boolean;
+  snapshots: CashFlowSnapshot[];
+  alerts: CashFlowAlert[];
+  timeline: CashFlowMonthSummary[];
+  events: CashFlowEvent[];
+}

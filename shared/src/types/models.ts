@@ -1,4 +1,10 @@
-import type { BudgetType, PlaidItemStatus, RecurringFrequency } from "./enums.js";
+import type {
+  BudgetType,
+  PlaidItemStatus,
+  RecurringFrequency,
+  CashFlowType,
+  CashFlowFrequency,
+} from "./enums.js";
 
 export interface User {
   id: string;
@@ -116,6 +122,33 @@ export interface RecurringPattern {
   createdAt: string;
   updatedAt: string;
   category?: Category | null;
+}
+
+export interface CashFlowOverride {
+  id: string;
+  cashFlowItemId: string;
+  periodKey: string;
+  amount: string | null;
+  isSkipped: boolean;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashFlowItem {
+  id: string;
+  userId: string;
+  type: CashFlowType;
+  name: string;
+  amount: string;
+  frequency: CashFlowFrequency;
+  anchorDate: string;
+  endDate: string | null;
+  isActive: boolean;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  overrides?: CashFlowOverride[];
 }
 
 export interface BudgetProgress {

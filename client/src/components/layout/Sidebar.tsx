@@ -8,6 +8,7 @@ import {
   Repeat,
   Settings,
   Building2,
+  TrendingUp,
   X,
 } from "lucide-react";
 import { useEffect } from "react";
@@ -20,6 +21,7 @@ const navItems = [
   { to: "/budgets", icon: Wallet, label: "Budgets" },
   { to: "/reports", icon: BarChart3, label: "Reports" },
   { to: "/recurring", icon: Repeat, label: "Recurring" },
+  { to: "/cashflow", icon: TrendingUp, label: "Cash Flow" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 

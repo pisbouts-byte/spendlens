@@ -10,6 +10,8 @@ export type {
   Budget,
   BudgetProgress,
   RecurringPattern,
+  CashFlowItem,
+  CashFlowOverride,
 } from "./types/models.js";
 
 export type {
@@ -21,9 +23,22 @@ export type {
   SpendingOverTime,
   TopMerchant,
   RecurringSummary,
+  CashFlowBalance,
+  CashFlowEvent,
+  CashFlowSnapshot,
+  CashFlowAlert,
+  CashFlowMonthSummary,
+  CashFlowForecast,
 } from "./types/api.js";
 
-export { BudgetType, WeekDay, PlaidItemStatus, RecurringFrequency } from "./types/enums.js";
+export {
+  BudgetType,
+  WeekDay,
+  PlaidItemStatus,
+  RecurringFrequency,
+  CashFlowType,
+  CashFlowFrequency,
+} from "./types/enums.js";
 
 // Schemas
 export {
@@ -70,6 +85,17 @@ export {
   type ForgotPasswordInput,
   type ResetPasswordInput,
 } from "./schemas/auth.js";
+
+export {
+  CreateCashFlowItemSchema,
+  UpdateCashFlowItemSchema,
+  UpsertCashFlowOverrideSchema,
+  UpdateBillsBalanceSchema,
+  type CreateCashFlowItemInput,
+  type UpdateCashFlowItemInput,
+  type UpsertCashFlowOverrideInput,
+  type UpdateBillsBalanceInput,
+} from "./schemas/cashflow.js";
 
 // Constants
 export { DEFAULT_CATEGORIES } from "./constants/categories.js";
