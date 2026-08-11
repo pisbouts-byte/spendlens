@@ -310,6 +310,8 @@ export async function syncAllActiveItems() {
 
   for (const item of items) {
     try {
+      const settings = await prisma.userSettings.findUnique({ where: { userId: item.userId } });
+      if (settings?.autoSyncEnabled === false) continue;
       const result = await syncTransactions(item.userId, item.id, "auto");
       totalAdded += result.added;
       totalModified += result.modified;
@@ -376,7 +378,10 @@ export async function handleWebhook(body: {
     });
 
     if (plaidItem && plaidItem.status === "ACTIVE") {
-      await syncTransactions(plaidItem.userId, plaidItem.id, "webhook");
+      const settings = await prisma.userSettings.findUnique({ where: { userId: plaidItem.userId } });
+      if (settings?.autoSyncEnabled !== false) {
+        await syncTransactions(plaidItem.userId, plaidItem.id, "webhook");
+      }
     }
   }
 

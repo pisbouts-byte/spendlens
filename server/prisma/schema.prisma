@@ -46,6 +46,7 @@ model UserSettings {
   userId                  String    @unique
   weekStartDay            Int       @default(1) // 0=Sun, 1=Mon, ..., 6=Sat
   currency                String    @default("USD")
+  autoSyncEnabled         Boolean   @default(true)
   billsAccountBalance     Decimal?  @db.Decimal(12, 2)
   billsAccountBalanceAsOf DateTime? @db.Date
   createdAt               DateTime  @default(now())

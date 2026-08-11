@@ -6,6 +6,7 @@ export interface UserSettings {
   userId: string;
   weekStartDay: number;
   currency: string;
+  autoSyncEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

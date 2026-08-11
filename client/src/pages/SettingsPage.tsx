@@ -39,6 +39,7 @@ export function SettingsPage() {
 
   const [weekStartDay, setWeekStartDay] = useState("1");
   const [currency, setCurrency] = useState("USD");
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
 
   useEffect(() => {
     settingsApi
@@ -47,6 +48,7 @@ export function SettingsPage() {
         setSettings(s);
         setWeekStartDay(String(s.weekStartDay));
         setCurrency(s.currency);
+        setAutoSyncEnabled(s.autoSyncEnabled ?? true);
       })
       .catch(() => toast("error", "Failed to load settings"))
       .finally(() => setLoading(false));
@@ -55,10 +57,11 @@ export function SettingsPage() {
   async function handleSave() {
     if (!settings) return;
 
-    const updates: { weekStartDay?: number; currency?: string } = {};
+    const updates: { weekStartDay?: number; currency?: string; autoSyncEnabled?: boolean } = {};
     const newDay = parseInt(weekStartDay, 10);
     if (newDay !== settings.weekStartDay) updates.weekStartDay = newDay;
     if (currency !== settings.currency) updates.currency = currency;
+    if (autoSyncEnabled !== (settings.autoSyncEnabled ?? true)) updates.autoSyncEnabled = autoSyncEnabled;
 
     if (Object.keys(updates).length === 0) {
       toast("info", "No changes to save");
@@ -109,6 +112,19 @@ export function SettingsPage() {
             onChange={(e) => setCurrency(e.target.value)}
             options={CURRENCY_OPTIONS}
           />
+          <div className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Automatic sync</p>
+              <p className="text-xs text-gray-500 mt-0.5">Sync transactions automatically via webhooks and scheduled jobs</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAutoSyncEnabled(v => !v)}
+              className={"relative inline-flex h-6 w-11 items-center rounded-full transition-colors " + (autoSyncEnabled ? "bg-brand-600" : "bg-gray-200")}
+            >
+              <span className={"inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform " + (autoSyncEnabled ? "translate-x-6" : "translate-x-1")} />
+            </button>
+          </div>
           <div className="pt-2">
             <Button onClick={handleSave} isLoading={saving}>
               Save Changes
