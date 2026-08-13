@@ -49,11 +49,15 @@ function getOffsetDate(type: "MONTHLY" | "WEEKLY", offset: number): { date: Date
   return { date: d, label };
 }
 
-// Local YYYY-MM-DD key for a period boundary, matching the server's own local-time period math.
+// YYYY-MM-DD key for a period boundary. The server always constructs period
+// bounds as midnight in its own process timezone (UTC in production), so the
+// UTC components of the resulting ISO string are the calendar date the server
+// intended — reading local components here would shift by a day whenever the
+// viewer's timezone differs from the server's (e.g. any non-UTC device).
 function formatDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
