@@ -2,10 +2,13 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { NotFoundError, BadRequestError } from "../utils/errors.js";
 import type {
+  CreateTransactionInput,
   UpdateTransactionInput,
   BulkUpdateTransactionsInput,
   TransactionQuery,
 } from "@spendlens/shared";
+
+const RECONCILE_DATE_WINDOW_MS = 5 * 86400000;
 
 export async function getTransactions(userId: string, query: TransactionQuery) {
   const where: Prisma.TransactionWhereInput = { userId };
@@ -79,6 +82,87 @@ export async function getTransaction(userId: string, transactionId: string) {
   }
 
   return transaction;
+}
+
+export async function createTransaction(userId: string, input: CreateTransactionInput) {
+  const transaction = await prisma.transaction.create({
+    data: {
+      userId,
+      amount: input.amount,
+      originalName: input.name,
+      date: new Date(input.date),
+      categoryId: input.categoryId ?? null,
+      notes: input.notes ?? null,
+      isManual: true,
+    },
+    include: { category: true, plaidAccount: true },
+  });
+  return transaction;
+}
+
+export async function unlinkTransaction(userId: string, transactionId: string) {
+  const transaction = await prisma.transaction.findFirst({
+    where: { id: transactionId, userId, isManual: true },
+  });
+
+  if (!transaction) {
+    throw new NotFoundError("Transaction");
+  }
+  if (!transaction.matchedTransactionId) {
+    throw new BadRequestError("This transaction isn't reconciled");
+  }
+
+  const updated = await prisma.transaction.update({
+    where: { id: transactionId },
+    data: { matchedTransactionId: null, isExcluded: false },
+    include: { category: true, plaidAccount: true },
+  });
+  return updated;
+}
+
+// Fuzzy-matches newly-synced transactions against the user's still-pending manual entries
+// (e.g. an expected refund), linking a match via matchedTransactionId and excluding the
+// manual row from totals so it stops double-counting once the real transaction has landed.
+export async function reconcileManualTransactions(
+  userId: string,
+  addedTransactions: { id: string; amount: Prisma.Decimal; date: Date }[],
+) {
+  if (addedTransactions.length === 0) return;
+
+  const pending = await prisma.transaction.findMany({
+    where: { userId, isManual: true, matchedTransactionId: null, isExcluded: false },
+  });
+  if (pending.length === 0) return;
+
+  const used = new Set<string>();
+  for (const manual of pending) {
+    const manualAmt = manual.amount.toNumber();
+    let best: { txn: (typeof addedTransactions)[number]; dateDiff: number; amtDiff: number } | null = null;
+
+    for (const txn of addedTransactions) {
+      if (used.has(txn.id)) continue;
+      const amt = txn.amount.toNumber();
+      if (manualAmt > 0 !== amt > 0) continue; // same sign (expense vs. income)
+      const dateDiff = Math.abs(txn.date.getTime() - manual.date.getTime());
+      if (dateDiff > RECONCILE_DATE_WINDOW_MS) continue;
+      const expectedCents = Math.round(Math.abs(manualAmt) * 100);
+      const actualCents = Math.round(Math.abs(amt) * 100);
+      const tolerance = Math.max(1000, expectedCents * 0.1);
+      const amtDiff = Math.abs(actualCents - expectedCents);
+      if (amtDiff > tolerance) continue;
+      if (!best || dateDiff < best.dateDiff || (dateDiff === best.dateDiff && amtDiff < best.amtDiff)) {
+        best = { txn, dateDiff, amtDiff };
+      }
+    }
+
+    if (best) {
+      used.add(best.txn.id);
+      await prisma.transaction.update({
+        where: { id: manual.id },
+        data: { matchedTransactionId: best.txn.id, isExcluded: true },
+      });
+    }
+  }
 }
 
 export async function updateTransaction(

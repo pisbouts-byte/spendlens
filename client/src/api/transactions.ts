@@ -4,6 +4,7 @@ import type {
   ApiResponse,
   PaginatedResponse,
   Transaction,
+  CreateTransactionInput,
   UpdateTransactionInput,
   BulkUpdateTransactionsInput,
 } from "@spendlens/shared";
@@ -36,6 +37,16 @@ export async function getTransactions(
     { params },
   );
   return data;
+}
+
+export async function createTransaction(input: CreateTransactionInput): Promise<Transaction> {
+  const { data } = await client.post<ApiResponse<Transaction>>("/transactions", input);
+  return data.data;
+}
+
+export async function unlinkTransaction(id: string): Promise<Transaction> {
+  const { data } = await client.post<ApiResponse<Transaction>>(`/transactions/${id}/unlink`);
+  return data.data;
 }
 
 export async function getTransaction(id: string): Promise<Transaction> {

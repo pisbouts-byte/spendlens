@@ -54,10 +54,12 @@ export {
 } from "./schemas/category.js";
 
 export {
+  CreateTransactionSchema,
   UpdateTransactionSchema,
   BulkUpdateTransactionsSchema,
   BulkDeleteTransactionsSchema,
   TransactionQuerySchema,
+  type CreateTransactionInput,
   type UpdateTransactionInput,
   type BulkUpdateTransactionsInput,
   type BulkDeleteTransactionsInput,

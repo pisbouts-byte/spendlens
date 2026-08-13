@@ -16,6 +16,9 @@ import {
   Tag,
   SlidersHorizontal,
   Trash2,
+  Plus,
+  Link2,
+  Link2Off,
 } from "lucide-react";
 import type { Transaction, Category, PaginatedResponse } from "@spendlens/shared";
 import * as transactionsApi from "../api/transactions.ts";
@@ -27,6 +30,7 @@ import { Button } from "../components/ui/Button.tsx";
 import { Badge } from "../components/ui/Badge.tsx";
 import { CategoryIcon } from "../components/ui/CategoryIcon.tsx";
 import { Spinner } from "../components/ui/Spinner.tsx";
+import { Modal } from "../components/ui/Modal.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
 
 type SortField = "date" | "amount" | "merchantName";
@@ -66,6 +70,9 @@ export function TransactionsPage() {
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [showAiWarning, setShowAiWarning] = useState(false);
   const [isApplyingRules, setIsApplyingRules] = useState(false);
+
+  // Manual transactions
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const AI_WARNED_KEY = "bw_ai_categorize_warned";
 
@@ -240,6 +247,16 @@ export function TransactionsPage() {
     }
   }
 
+  async function handleUnlink(id: string) {
+    try {
+      const updated = await transactionsApi.unlinkTransaction(id);
+      setTransactions((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      toast("success", "Unlinked");
+    } catch {
+      toast("error", "Failed to unlink transaction");
+    }
+  }
+
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return;
     if (!confirm(`Delete ${selectedIds.size} transaction(s)? This cannot be undone.`)) return;
@@ -396,6 +413,11 @@ export function TransactionsPage() {
           <Button variant="secondary" size="sm" onClick={handleExport} className="hidden sm:inline-flex">
             <Download className="mr-1.5 h-4 w-4" />
             Export
+          </Button>
+          <Button size="sm" onClick={() => setShowAddModal(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            <span className="hidden sm:inline">Add Transaction</span>
+            <span className="sm:hidden">Add</span>
           </Button>
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -625,6 +647,14 @@ export function TransactionsPage() {
                               {txn.isPending && (
                                 <span className="ml-1 text-amber-500">(pending)</span>
                               )}
+                              {txn.isManual && !txn.matchedTransactionId && (
+                                <span className="ml-1 text-blue-500">(manual)</span>
+                              )}
+                              {txn.matchedTransactionId && (
+                                <span className="ml-1 inline-flex items-center gap-0.5 text-blue-600">
+                                  <Link2 className="h-3 w-3" /> Reconciled
+                                </span>
+                              )}
                               {txn.plaidAccount && (
                                 <span className="ml-1">
                                   · {txn.plaidAccount.name}
@@ -680,6 +710,15 @@ export function TransactionsPage() {
                             </button>
                           )}
                           <div className="flex items-center gap-1">
+                            {txn.matchedTransactionId && (
+                              <button
+                                onClick={() => handleUnlink(txn.id)}
+                                title="Unlink reconciled match"
+                                className="rounded p-1.5 text-blue-500 hover:bg-blue-50"
+                              >
+                                <Link2Off className="h-4 w-4" />
+                              </button>
+                            )}
                             <button onClick={() => handleToggleExclude(txn)} className="rounded p-1.5 text-gray-400 hover:bg-gray-100">
                               {txn.isExcluded ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
@@ -772,6 +811,14 @@ export function TransactionsPage() {
                             {txn.isPending && (
                               <span className="ml-1.5 text-xs text-amber-500">(pending)</span>
                             )}
+                            {txn.isManual && !txn.matchedTransactionId && (
+                              <span className="ml-1.5 text-xs text-blue-500">(manual)</span>
+                            )}
+                            {txn.matchedTransactionId && (
+                              <span className="ml-1.5 inline-flex items-center gap-0.5 text-xs text-blue-600">
+                                <Link2 className="h-3 w-3" /> Reconciled
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <div className="font-medium text-gray-900">
@@ -848,6 +895,15 @@ export function TransactionsPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
+                              {txn.matchedTransactionId && (
+                                <button
+                                  onClick={() => handleUnlink(txn.id)}
+                                  className="rounded p-1 text-blue-500 transition-colors hover:bg-blue-50"
+                                  title="Unlink reconciled match"
+                                >
+                                  <Link2Off className="h-4 w-4" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleToggleExclude(txn)}
                                 className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
@@ -970,6 +1026,161 @@ export function TransactionsPage() {
           </div>
         </div>
       )}
+
+      {/* Add Transaction */}
+      {showAddModal && (
+        <AddTransactionModal
+          categories={categories}
+          onClose={() => setShowAddModal(false)}
+          onSaved={async () => {
+            setShowAddModal(false);
+            await fetchTransactions();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+interface AddTransactionModalProps {
+  categories: Category[];
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}
+
+function AddTransactionModal({ categories, onClose, onSaved }: AddTransactionModalProps) {
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<"expense" | "income">("expense");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [categoryId, setCategoryId] = useState("");
+  const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      toast("error", "Enter a valid positive amount");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await transactionsApi.createTransaction({
+        name,
+        amount: kind === "expense" ? amountNum : -amountNum,
+        date,
+        categoryId: categoryId || null,
+        notes: notes || null,
+      });
+      toast("success", "Added");
+      await onSaved();
+    } catch {
+      toast("error", "Failed to add transaction");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} title="Add Transaction">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Expected Amazon refund"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            autoFocus
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setKind("expense")}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                kind === "expense"
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
+                  : "border-gray-300 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => setKind("income")}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                kind === "income"
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
+                  : "border-gray-300 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Refund / Income
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Amount ($)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Category (optional)</label>
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="">Uncategorized</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Notes (optional)</label>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" isLoading={isSubmitting}>
+            Add
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

@@ -9,7 +9,7 @@ import { prisma } from "../config/prisma.js";
 import { env } from "../config/env.js";
 import { encrypt, decrypt } from "../utils/encryption.js";
 import { NotFoundError, BadRequestError } from "../utils/errors.js";
-import { applyRules } from "./transaction.service.js";
+import { applyRules, reconcileManualTransactions } from "./transaction.service.js";
 
 const plaidEnvMap: Record<string, string> = {
   sandbox: PlaidEnvironments.sandbox,
@@ -189,6 +189,12 @@ export async function syncTransactions(userId: string, itemId: string, trigger: 
         skipDuplicates: true,
       });
       addedCount += added.length;
+
+      const insertedTxns = await prisma.transaction.findMany({
+        where: { userId, plaidTransactionId: { in: added.map((txn) => txn.transaction_id) } },
+        select: { id: true, amount: true, date: true },
+      });
+      await reconcileManualTransactions(userId, insertedTxns);
     }
 
     // Process modified transactions

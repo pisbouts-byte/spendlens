@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const CreateTransactionSchema = z.object({
+  name: z.string().min(1).max(200),
+  amount: z.number().refine((n) => n !== 0, "Amount can't be zero"),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+  categoryId: z.string().uuid().nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
 export const UpdateTransactionSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   isExcluded: z.boolean().optional(),
@@ -29,6 +37,7 @@ export const BulkDeleteTransactionsSchema = z.object({
   transactionIds: z.array(z.string().uuid()).min(1).max(500),
 });
 
+export type CreateTransactionInput = z.infer<typeof CreateTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof UpdateTransactionSchema>;
 export type BulkUpdateTransactionsInput = z.infer<typeof BulkUpdateTransactionsSchema>;
 export type BulkDeleteTransactionsInput = z.infer<typeof BulkDeleteTransactionsSchema>;

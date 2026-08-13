@@ -23,6 +23,27 @@ export async function getTransaction(req: Request, res: Response, next: NextFunc
   }
 }
 
+export async function createTransaction(req: Request, res: Response, next: NextFunction) {
+  try {
+    const transaction = await transactionService.createTransaction(req.userId!, req.body);
+    res.status(201).json({ success: true, data: transaction });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function unlinkTransaction(req: Request, res: Response, next: NextFunction) {
+  try {
+    const transaction = await transactionService.unlinkTransaction(
+      req.userId!,
+      req.params.id as string,
+    );
+    res.json({ success: true, data: transaction });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateTransaction(req: Request, res: Response, next: NextFunction) {
   try {
     const transaction = await transactionService.updateTransaction(

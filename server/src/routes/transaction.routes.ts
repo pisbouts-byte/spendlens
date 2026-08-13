@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType } from "express";
 import {
+  CreateTransactionSchema,
   UpdateTransactionSchema,
   BulkUpdateTransactionsSchema,
   BulkDeleteTransactionsSchema,
@@ -20,6 +21,14 @@ router.get(
 );
 
 router.get("/export", transactionController.exportTransactions);
+
+router.post(
+  "/",
+  validateRequest({ body: CreateTransactionSchema }),
+  transactionController.createTransaction,
+);
+
+router.post("/:id/unlink", transactionController.unlinkTransaction);
 
 router.patch(
   "/bulk",
