@@ -14,6 +14,7 @@ import { BudgetsPage } from "./pages/BudgetsPage.tsx";
 import { ReportsPage } from "./pages/ReportsPage.tsx";
 import { RecurringPage } from "./pages/RecurringPage.tsx";
 import { CashFlowPage } from "./pages/CashFlowPage.tsx";
+import { FiftyThirtyTwentyPage } from "./pages/FiftyThirtyTwentyPage.tsx";
 import { SettingsPage } from "./pages/SettingsPage.tsx";
 import { AccountsPage } from "./pages/AccountsPage.tsx";
 import { NotFoundPage } from "./pages/NotFoundPage.tsx";
@@ -106,6 +107,7 @@ function App() {
           <Route path="reports" element={<ReportsPage />} />
           <Route path="recurring" element={<RecurringPage />} />
           <Route path="cashflow" element={<CashFlowPage />} />
+          <Route path="fifty-thirty-twenty" element={<FiftyThirtyTwentyPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />

@@ -9,6 +9,7 @@ import {
   Settings,
   Building2,
   TrendingUp,
+  PiggyBank,
   X,
 } from "lucide-react";
 import { useEffect } from "react";
@@ -22,6 +23,7 @@ const navItems = [
   { to: "/reports", icon: BarChart3, label: "Reports" },
   { to: "/recurring", icon: Repeat, label: "Recurring" },
   { to: "/cashflow", icon: TrendingUp, label: "Cash Flow" },
+  { to: "/fifty-thirty-twenty", icon: PiggyBank, label: "50/30/20" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
