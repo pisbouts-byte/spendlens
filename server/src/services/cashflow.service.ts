@@ -86,6 +86,8 @@ export async function updateItem(userId: string, itemId: string, input: UpdateCa
   if (input.endDate !== undefined) data.endDate = input.endDate ? parseUTCDateString(input.endDate) : null;
   if (input.isActive !== undefined) data.isActive = input.isActive;
   if (input.note !== undefined) data.note = input.note;
+  if (input.fiftyThirtyTwentyCategory !== undefined) data.fiftyThirtyTwentyCategory = input.fiftyThirtyTwentyCategory;
+  if (input.excludeFromFiftyThirtyTwenty !== undefined) data.excludeFromFiftyThirtyTwenty = input.excludeFromFiftyThirtyTwenty;
 
   const item = await prisma.cashFlowItem.update({
     where: { id: itemId },

@@ -43,6 +43,7 @@ export async function updateItem(userId: string, itemId: string, input: UpdateFi
   }
 
   const data: Prisma.FiftyThirtyTwentyItemUpdateInput = {};
+  if (input.category !== undefined) data.category = input.category;
   if (input.name !== undefined) data.name = input.name;
   if (input.amount !== undefined) data.amount = input.amount;
   if (input.frequency !== undefined) data.frequency = input.frequency;

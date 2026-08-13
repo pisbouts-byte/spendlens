@@ -3,6 +3,7 @@ import { env } from "./config/env.js";
 import { syncAllActiveItems } from "./services/plaid.service.js";
 
 const SYNC_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 app.listen(env.PORT, () => {
   console.log(`SpendLens API running on http://localhost:${env.PORT}`);
@@ -27,4 +28,13 @@ app.listen(env.PORT, () => {
       console.error("[Auto-sync] Failed:", error);
     }
   }, SYNC_INTERVAL_MS);
+
+  // Render's free web-service tier sleeps after ~15 min of inactivity, which kills the
+  // interval above and can cause Plaid webhooks to arrive too late for a cold dyno.
+  // Self-pinging keeps the dyno awake so auto-sync and webhooks stay reliable.
+  if (process.env.RENDER === "true") {
+    setInterval(() => {
+      fetch(`http://localhost:${env.PORT}/health`).catch(() => {});
+    }, KEEP_ALIVE_INTERVAL_MS);
+  }
 });

@@ -79,6 +79,8 @@ export interface Transaction {
   isPending: boolean;
   notes: string | null;
   aiConfidence: number | null;
+  isManual: boolean;
+  matchedTransactionId: string | null;
   createdAt: string;
   updatedAt: string;
   category?: Category | null;
@@ -149,6 +151,8 @@ export interface CashFlowItem {
   endDate: string | null;
   isActive: boolean;
   note: string | null;
+  fiftyThirtyTwentyCategory: FiftyThirtyTwentyCategory | null;
+  excludeFromFiftyThirtyTwenty: boolean;
   createdAt: string;
   updatedAt: string;
   overrides?: CashFlowOverride[];

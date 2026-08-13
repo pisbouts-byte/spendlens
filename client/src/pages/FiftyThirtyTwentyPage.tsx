@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Pencil, Trash2, Play, Pause, PiggyBank } from "lucide-react";
+import { Plus, Pencil, Trash2, Play, Pause, PiggyBank, EyeOff, ExternalLink } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -60,6 +60,13 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
+function effectiveCategory(item: CashFlowItem): FiftyThirtyTwentyCategory {
+  return (
+    item.fiftyThirtyTwentyCategory ??
+    (item.type === CashFlowType.BILL ? FiftyThirtyTwentyCategory.NECESSITY : FiftyThirtyTwentyCategory.INCOME)
+  );
+}
+
 function errorMessage(err: unknown, fallback: string): string {
   if (
     err &&
@@ -81,8 +88,7 @@ export function FiftyThirtyTwentyPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
 
-  const [cashFlowIncome, setCashFlowIncome] = useState<CashFlowItem[]>([]);
-  const [cashFlowBills, setCashFlowBills] = useState<CashFlowItem[]>([]);
+  const [cashFlowItems, setCashFlowItems] = useState<CashFlowItem[]>([]);
   const [necessityItems, setNecessityItems] = useState<FiftyThirtyTwentyItem[]>([]);
   const [wantItems, setWantItems] = useState<FiftyThirtyTwentyItem[]>([]);
   const [savingsItems, setSavingsItems] = useState<FiftyThirtyTwentyItem[]>([]);
@@ -98,8 +104,7 @@ export function FiftyThirtyTwentyPage() {
         cashflowApi.getItems(),
         fiftyThirtyTwentyApi.getItems(),
       ]);
-      setCashFlowIncome(cfItems.filter((i) => i.type === CashFlowType.INCOME));
-      setCashFlowBills(cfItems.filter((i) => i.type === CashFlowType.BILL));
+      setCashFlowItems(cfItems);
       setNecessityItems(budgetItems.filter((i) => i.category === FiftyThirtyTwentyCategory.NECESSITY));
       setWantItems(budgetItems.filter((i) => i.category === FiftyThirtyTwentyCategory.WANT));
       setSavingsItems(budgetItems.filter((i) => i.category === FiftyThirtyTwentyCategory.SAVINGS));
@@ -115,15 +120,46 @@ export function FiftyThirtyTwentyPage() {
     fetchData();
   }, [fetchData]);
 
-  const totalNeeds = useMemo(
-    () => monthlyEquivalentTotal(cashFlowBills) + monthlyEquivalentTotal(necessityItems),
-    [cashFlowBills, necessityItems],
+  const visibleCashFlowItems = useMemo(
+    () => cashFlowItems.filter((i) => !i.excludeFromFiftyThirtyTwenty),
+    [cashFlowItems],
   );
-  const totalWants = useMemo(() => monthlyEquivalentTotal(wantItems), [wantItems]);
-  const totalSavings = useMemo(() => monthlyEquivalentTotal(savingsItems), [savingsItems]);
+  const excludedCashFlowItems = useMemo(
+    () => cashFlowItems.filter((i) => i.excludeFromFiftyThirtyTwenty),
+    [cashFlowItems],
+  );
+  const cfNeeds = useMemo(
+    () => visibleCashFlowItems.filter((i) => effectiveCategory(i) === FiftyThirtyTwentyCategory.NECESSITY),
+    [visibleCashFlowItems],
+  );
+  const cfWants = useMemo(
+    () => visibleCashFlowItems.filter((i) => effectiveCategory(i) === FiftyThirtyTwentyCategory.WANT),
+    [visibleCashFlowItems],
+  );
+  const cfSavings = useMemo(
+    () => visibleCashFlowItems.filter((i) => effectiveCategory(i) === FiftyThirtyTwentyCategory.SAVINGS),
+    [visibleCashFlowItems],
+  );
+  const cfIncome = useMemo(
+    () => visibleCashFlowItems.filter((i) => effectiveCategory(i) === FiftyThirtyTwentyCategory.INCOME),
+    [visibleCashFlowItems],
+  );
+
+  const totalNeeds = useMemo(
+    () => monthlyEquivalentTotal(cfNeeds) + monthlyEquivalentTotal(necessityItems),
+    [cfNeeds, necessityItems],
+  );
+  const totalWants = useMemo(
+    () => monthlyEquivalentTotal(cfWants) + monthlyEquivalentTotal(wantItems),
+    [cfWants, wantItems],
+  );
+  const totalSavings = useMemo(
+    () => monthlyEquivalentTotal(cfSavings) + monthlyEquivalentTotal(savingsItems),
+    [cfSavings, savingsItems],
+  );
   const totalIncome = useMemo(
-    () => monthlyEquivalentTotal(cashFlowIncome) + monthlyEquivalentTotal(incomeItems),
-    [cashFlowIncome, incomeItems],
+    () => monthlyEquivalentTotal(cfIncome) + monthlyEquivalentTotal(incomeItems),
+    [cfIncome, incomeItems],
   );
 
   const needsTarget = totalIncome * 0.5;
@@ -160,6 +196,35 @@ export function FiftyThirtyTwentyPage() {
       toast("success", item.isActive ? "Paused" : "Resumed");
     } catch {
       toast("error", "Failed to update");
+    }
+  }
+
+  async function handleRecategorizeCashFlowItem(item: CashFlowItem, category: FiftyThirtyTwentyCategory) {
+    try {
+      await cashflowApi.updateItem(item.id, { fiftyThirtyTwentyCategory: category });
+      await fetchData();
+    } catch {
+      toast("error", "Failed to recategorize");
+    }
+  }
+
+  async function handleExcludeCashFlowItem(item: CashFlowItem) {
+    try {
+      await cashflowApi.updateItem(item.id, { excludeFromFiftyThirtyTwenty: true });
+      toast("success", "Excluded from 50/30/20");
+      await fetchData();
+    } catch {
+      toast("error", "Failed to exclude");
+    }
+  }
+
+  async function handleIncludeCashFlowItem(item: CashFlowItem) {
+    try {
+      await cashflowApi.updateItem(item.id, { excludeFromFiftyThirtyTwenty: false });
+      toast("success", "Included in 50/30/20");
+      await fetchData();
+    } catch {
+      toast("error", "Failed to include");
     }
   }
 
@@ -274,7 +339,7 @@ export function FiftyThirtyTwentyPage() {
       <CategorySection
         title="Needs"
         category={FiftyThirtyTwentyCategory.NECESSITY}
-        readOnlyItems={cashFlowBills}
+        readOnlyItems={cfNeeds}
         readOnlySectionLabel="From Cash Flow"
         editableItems={necessityItems}
         editableSectionLabel="Additional Necessities"
@@ -284,39 +349,51 @@ export function FiftyThirtyTwentyPage() {
         onEdit={setEditingItem}
         onDelete={handleDeleteItem}
         onToggleActive={handleToggleActive}
+        onRecategorize={handleRecategorizeCashFlowItem}
+        onExclude={handleExcludeCashFlowItem}
       />
 
       {/* Wants */}
       <CategorySection
         title="Wants"
         category={FiftyThirtyTwentyCategory.WANT}
+        readOnlyItems={cfWants}
+        readOnlySectionLabel="From Cash Flow"
         editableItems={wantItems}
+        editableSectionLabel="Additional Wants"
         addLabel="Add Want"
         monthlyTotal={totalWants}
         onAdd={() => setItemModalCategory(FiftyThirtyTwentyCategory.WANT)}
         onEdit={setEditingItem}
         onDelete={handleDeleteItem}
         onToggleActive={handleToggleActive}
+        onRecategorize={handleRecategorizeCashFlowItem}
+        onExclude={handleExcludeCashFlowItem}
       />
 
       {/* Savings */}
       <CategorySection
         title="Savings"
         category={FiftyThirtyTwentyCategory.SAVINGS}
+        readOnlyItems={cfSavings}
+        readOnlySectionLabel="From Cash Flow"
         editableItems={savingsItems}
+        editableSectionLabel="Additional Savings"
         addLabel="Add Savings Contribution"
         monthlyTotal={totalSavings}
         onAdd={() => setItemModalCategory(FiftyThirtyTwentyCategory.SAVINGS)}
         onEdit={setEditingItem}
         onDelete={handleDeleteItem}
         onToggleActive={handleToggleActive}
+        onRecategorize={handleRecategorizeCashFlowItem}
+        onExclude={handleExcludeCashFlowItem}
       />
 
       {/* Income */}
       <CategorySection
         title="Income"
         category={FiftyThirtyTwentyCategory.INCOME}
-        readOnlyItems={cashFlowIncome}
+        readOnlyItems={cfIncome}
         readOnlySectionLabel="From Cash Flow"
         editableItems={incomeItems}
         editableSectionLabel="Additional Income"
@@ -326,7 +403,37 @@ export function FiftyThirtyTwentyPage() {
         onEdit={setEditingItem}
         onDelete={handleDeleteItem}
         onToggleActive={handleToggleActive}
+        onRecategorize={handleRecategorizeCashFlowItem}
+        onExclude={handleExcludeCashFlowItem}
       />
+
+      {/* Excluded from 50/30/20 */}
+      {excludedCashFlowItems.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-gray-900">Excluded from 50/30/20</h2>
+          <div className="mt-3 space-y-2">
+            {excludedCashFlowItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 p-3"
+              >
+                <div>
+                  <span className="font-medium text-gray-500">{item.name}</span>
+                  <p className="text-sm text-gray-400">
+                    {formatCurrency(item.amount)} · {FREQUENCY_LABELS[item.frequency]}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleIncludeCashFlowItem(item)}
+                  className="rounded-full bg-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-300"
+                >
+                  Include
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Create modal */}
       {itemModalCategory && (
@@ -403,6 +510,8 @@ interface CategorySectionProps {
   onEdit: (item: FiftyThirtyTwentyItem) => void;
   onDelete: (item: FiftyThirtyTwentyItem) => void;
   onToggleActive: (item: FiftyThirtyTwentyItem) => void;
+  onRecategorize: (item: CashFlowItem, category: FiftyThirtyTwentyCategory) => void;
+  onExclude: (item: CashFlowItem) => void;
 }
 
 function CategorySection({
@@ -417,6 +526,8 @@ function CategorySection({
   onEdit,
   onDelete,
   onToggleActive,
+  onRecategorize,
+  onExclude,
 }: CategorySectionProps) {
   const isEmpty = readOnlyItems.length === 0 && editableItems.length === 0;
   const showSubheaders = readOnlyItems.length > 0 && !!editableSectionLabel;
@@ -445,14 +556,36 @@ function CategorySection({
               <div className="space-y-2">
                 {readOnlyItems.map((item) => (
                   <div key={item.id} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-gray-700">{item.name}</span>
-                      <Link
-                        to="/cashflow"
-                        className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-300"
-                      >
-                        Cash Flow
-                      </Link>
+                      <div className="flex flex-shrink-0 items-center gap-1">
+                        <select
+                          value={effectiveCategory(item)}
+                          onChange={(e) => onRecategorize(item, e.target.value as FiftyThirtyTwentyCategory)}
+                          title="Move to a different 50/30/20 bucket"
+                          className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 focus:border-brand-500 focus:outline-none"
+                        >
+                          {Object.values(FiftyThirtyTwentyCategory).map((c) => (
+                            <option key={c} value={c}>
+                              {CATEGORY_LABELS[c]}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => onExclude(item)}
+                          title="Exclude from 50/30/20"
+                          className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+                        >
+                          <EyeOff className="h-3.5 w-3.5" />
+                        </button>
+                        <Link
+                          to="/cashflow"
+                          title="Edit in Cash Flow"
+                          className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
                     </div>
                     <p className="text-sm text-gray-500">
                       {formatCurrency(item.amount)} · {FREQUENCY_LABELS[item.frequency]}
@@ -537,6 +670,7 @@ interface ItemFormModalProps {
 function ItemFormModal({ category, editingItem, onClose, onSaved }: ItemFormModalProps) {
   const { toast } = useToast();
   const isEdit = !!editingItem;
+  const [selectedCategory, setSelectedCategory] = useState<FiftyThirtyTwentyCategory>(category);
   const [name, setName] = useState(editingItem?.name ?? "");
   const [amount, setAmount] = useState(editingItem?.amount ?? "");
   const [frequency, setFrequency] = useState<CashFlowFrequency>(editingItem?.frequency ?? CashFlowFrequency.MONTHLY);
@@ -554,6 +688,7 @@ function ItemFormModal({ category, editingItem, onClose, onSaved }: ItemFormModa
     try {
       if (isEdit) {
         await fiftyThirtyTwentyApi.updateItem(editingItem.id, {
+          category: selectedCategory,
           name,
           amount: amountNum,
           frequency,
@@ -578,18 +713,34 @@ function ItemFormModal({ category, editingItem, onClose, onSaved }: ItemFormModa
     }
   }
 
-  const label = CATEGORY_LABELS[category];
+  const label = CATEGORY_LABELS[selectedCategory];
 
   return (
     <Modal isOpen onClose={onClose} title={isEdit ? `Edit ${label}` : `Add ${label}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {isEdit && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Category</label>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value as FiftyThirtyTwentyCategory)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {Object.values(FiftyThirtyTwentyCategory).map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={CATEGORY_PLACEHOLDERS[category]}
+            placeholder={CATEGORY_PLACEHOLDERS[selectedCategory]}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
             autoFocus
             required

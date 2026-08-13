@@ -10,6 +10,7 @@ export const CreateFiftyThirtyTwentyItemSchema = z.object({
 });
 
 export const UpdateFiftyThirtyTwentyItemSchema = z.object({
+  category: z.nativeEnum(FiftyThirtyTwentyCategory).optional(),
   name: z.string().min(1).max(100).optional(),
   amount: z.number().positive().max(999999999999).optional(),
   frequency: z.nativeEnum(CashFlowFrequency).optional(),

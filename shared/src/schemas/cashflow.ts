@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CashFlowType, CashFlowFrequency } from "../types/enums.js";
+import { CashFlowType, CashFlowFrequency, FiftyThirtyTwentyCategory } from "../types/enums.js";
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
@@ -20,6 +20,8 @@ export const UpdateCashFlowItemSchema = z.object({
   endDate: dateString.nullable().optional(),
   isActive: z.boolean().optional(),
   note: z.string().max(500).nullable().optional(),
+  fiftyThirtyTwentyCategory: z.nativeEnum(FiftyThirtyTwentyCategory).nullable().optional(),
+  excludeFromFiftyThirtyTwenty: z.boolean().optional(),
 });
 
 export const UpsertCashFlowOverrideSchema = z.object({

@@ -31,6 +31,8 @@ app.use(
 app.use(express.json());
 app.use(morgan("dev"));
 
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
 app.use("/api", routes);
 
 app.use(errorHandler);
