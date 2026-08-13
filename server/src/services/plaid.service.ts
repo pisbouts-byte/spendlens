@@ -154,9 +154,9 @@ export async function syncTransactions(userId: string, itemId: string, trigger: 
   let modifiedCount = 0;
   let removedCount = 0;
 
-  // Build account ID -> internal ID map
+  // Build account ID -> internal ID + spending-visibility map
   const accountMap = new Map(
-    plaidItem.accounts.map((a) => [a.plaidAccountId, a.id]),
+    plaidItem.accounts.map((a) => [a.plaidAccountId, { id: a.id, includeInSpending: a.includeInSpending }]),
   );
 
   try {
@@ -174,7 +174,7 @@ export async function syncTransactions(userId: string, itemId: string, trigger: 
       await prisma.transaction.createMany({
         data: added.map((txn) => ({
           userId,
-          plaidAccountId: accountMap.get(txn.account_id) ?? null,
+          plaidAccountId: accountMap.get(txn.account_id)?.id ?? null,
           plaidTransactionId: txn.transaction_id,
           amount: txn.amount,
           merchantName: txn.merchant_name ?? null,
@@ -184,6 +184,7 @@ export async function syncTransactions(userId: string, itemId: string, trigger: 
           originalCategory: txn.personal_finance_category?.primary ?? null,
           isPending: txn.pending,
           pendingTransactionId: txn.pending_transaction_id ?? null,
+          isExcluded: !(accountMap.get(txn.account_id)?.includeInSpending ?? true),
         })),
         skipDuplicates: true,
       });
@@ -337,6 +338,39 @@ export async function getAccounts(userId: string) {
   });
 
   return items;
+}
+
+export async function updateAccountSettings(
+  userId: string,
+  accountId: string,
+  input: { includeInCashFlow?: boolean; includeInSpending?: boolean },
+) {
+  const account = await prisma.plaidAccount.findFirst({
+    where: { id: accountId, plaidItem: { userId } },
+  });
+
+  if (!account) {
+    throw new NotFoundError("Account");
+  }
+
+  const updated = await prisma.plaidAccount.update({
+    where: { id: accountId },
+    data: input,
+  });
+
+  // Bulk-align existing transactions with the new spending-visibility setting. This is a
+  // deliberate overwrite tied to the toggle action, in both directions.
+  if (
+    input.includeInSpending !== undefined &&
+    input.includeInSpending !== account.includeInSpending
+  ) {
+    await prisma.transaction.updateMany({
+      where: { plaidAccountId: accountId },
+      data: { isExcluded: !input.includeInSpending },
+    });
+  }
+
+  return updated;
 }
 
 export async function removeItem(userId: string, itemId: string) {

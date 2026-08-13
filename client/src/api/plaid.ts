@@ -13,6 +13,8 @@ interface PlaidAccount {
   type: string;
   subtype: string | null;
   mask: string | null;
+  includeInCashFlow: boolean;
+  includeInSpending: boolean;
 }
 
 export interface PlaidItemWithAccounts {
@@ -107,4 +109,15 @@ export async function getSyncLogs(limit = 50): Promise<SyncLogEntry[]> {
 
 export async function removeItem(itemId: string): Promise<void> {
   await client.delete(`/plaid/items/${itemId}`);
+}
+
+export async function updateAccountSettings(
+  accountId: string,
+  input: { includeInCashFlow?: boolean; includeInSpending?: boolean },
+): Promise<PlaidAccount> {
+  const { data } = await client.patch<ApiResponse<PlaidAccount>>(
+    `/plaid/accounts/${accountId}`,
+    input,
+  );
+  return data.data;
 }

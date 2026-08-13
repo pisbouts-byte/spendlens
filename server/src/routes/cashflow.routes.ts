@@ -4,6 +4,7 @@ import {
   UpdateCashFlowItemSchema,
   UpsertCashFlowOverrideSchema,
   UpdateBillsBalanceSchema,
+  ForecastQuerySchema,
 } from "@spendlens/shared";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -13,7 +14,11 @@ const router: RouterType = Router();
 
 router.use(requireAuth);
 
-router.get("/forecast", cashflowController.getForecast);
+router.get(
+  "/forecast",
+  validateRequest({ query: ForecastQuerySchema }),
+  cashflowController.getForecast,
+);
 
 router.get("/balance", cashflowController.getBalance);
 router.put(

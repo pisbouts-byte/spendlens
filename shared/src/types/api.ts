@@ -72,6 +72,9 @@ export interface CashFlowEvent {
   type: "INCOME" | "BILL";
   amount: string;
   isOverridden: boolean;
+  isReconciled: boolean;
+  isUnexpected: boolean;
+  plannedAmount?: string;
 }
 
 export interface CashFlowSnapshot {
@@ -106,4 +109,5 @@ export interface CashFlowForecast {
   alerts: CashFlowAlert[];
   timeline: CashFlowMonthSummary[];
   events: CashFlowEvent[];
+  unexpectedTransactions: CashFlowEvent[];
 }

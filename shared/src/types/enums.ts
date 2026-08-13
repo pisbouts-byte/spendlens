@@ -41,3 +41,10 @@ export enum CashFlowFrequency {
   SEMIANNUALLY = "SEMIANNUALLY",
   YEARLY = "YEARLY",
 }
+
+export enum FiftyThirtyTwentyCategory {
+  NECESSITY = "NECESSITY",
+  WANT = "WANT",
+  SAVINGS = "SAVINGS",
+  INCOME = "INCOME",
+}

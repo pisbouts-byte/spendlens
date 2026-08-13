@@ -17,6 +17,11 @@ export const BudgetProgressQuerySchema = z.object({
   date: z.string().optional(),
 });
 
+export const CarryOverBudgetSchema = z.object({
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+});
+
 export type CreateBudgetInput = z.infer<typeof CreateBudgetSchema>;
 export type UpdateBudgetInput = z.infer<typeof UpdateBudgetSchema>;
 export type BudgetProgressQuery = z.infer<typeof BudgetProgressQuerySchema>;
+export type CarryOverBudgetInput = z.infer<typeof CarryOverBudgetSchema>;

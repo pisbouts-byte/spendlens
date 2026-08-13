@@ -74,6 +74,19 @@ export async function getAccounts(req: Request, res: Response, next: NextFunctio
   }
 }
 
+export async function updateAccountSettings(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await plaidService.updateAccountSettings(
+      req.userId!,
+      req.params.id as string,
+      req.body,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function removeItem(req: Request, res: Response, next: NextFunction) {
   try {
     await plaidService.removeItem(req.userId!, req.params.itemId as string);

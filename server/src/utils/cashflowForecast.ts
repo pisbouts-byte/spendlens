@@ -26,11 +26,26 @@ export interface CashFlowItemInput {
   overrides: Map<string, CashFlowOverrideInput>; // keyed by periodKey
 }
 
+export interface ExtraEventInput {
+  date: Date;
+  itemName: string;
+  type: CashFlowItemKind;
+  cents: number; // signed: positive for income, negative for bills
+}
+
 export interface ForecastInput {
   items: CashFlowItemInput[];
   startingBalanceCents: number;
   asOfDate: Date;
   today: Date;
+  /** How many months forward to generate the timeline/events for. Always at least 12
+   *  (the "oneYearOut" snapshot needs a full year regardless of this value). Default 12. */
+  horizonMonths?: number;
+  /** Reconciled actual amounts (cents, same sign convention as CashFlowEventResult.cents) for
+   *  planned occurrences that matched a real transaction, keyed `${itemId}|${YYYY-MM-DD}`. */
+  reconciledAmounts?: Map<string, number>;
+  /** Real transactions on cash-flow-linked accounts that didn't match any planned occurrence. */
+  extraEvents?: ExtraEventInput[];
 }
 
 export interface CashFlowEventResult {
@@ -40,6 +55,9 @@ export interface CashFlowEventResult {
   type: CashFlowItemKind;
   cents: number; // signed: positive for income, negative for bills
   isOverridden: boolean;
+  isReconciled: boolean;
+  isUnexpected: boolean;
+  plannedCents?: number; // only set when isReconciled, so planned-vs-actual can be shown
 }
 
 export interface SnapshotResult {
@@ -183,6 +201,8 @@ function eventsForItem(item: CashFlowItemInput, asOfDate: Date, horizonEnd: Date
       type: item.type,
       cents: item.type === "INCOME" ? cents : -cents,
       isOverridden,
+      isReconciled: false,
+      isUnexpected: false,
     });
   }
   return events;
@@ -191,12 +211,43 @@ function eventsForItem(item: CashFlowItemInput, asOfDate: Date, horizonEnd: Date
 export function computeForecast(input: ForecastInput): ForecastResult {
   const today = utcMidnight(input.today);
   const asOfDate = utcMidnight(input.asOfDate);
-  const horizonEnd = addMonthsClamped(today, 12);
+  const horizonMonths = Math.max(12, input.horizonMonths ?? 12);
+  const horizonEnd = addMonthsClamped(today, horizonMonths);
+  // "1 year from today" is always exactly 12 months out, even when the timeline/events
+  // above were generated further out for a custom chart range.
+  const oneYearOutDate = addMonthsClamped(today, 12);
 
   const events: CashFlowEventResult[] = [];
   for (const item of input.items) {
     events.push(...eventsForItem(item, asOfDate, horizonEnd));
   }
+
+  if (input.reconciledAmounts && input.reconciledAmounts.size > 0) {
+    for (const ev of events) {
+      const actualCents = input.reconciledAmounts.get(`${ev.itemId}|${formatUTCDate(ev.date)}`);
+      if (actualCents !== undefined) {
+        ev.plannedCents = ev.cents;
+        ev.cents = actualCents;
+        ev.isReconciled = true;
+      }
+    }
+  }
+
+  if (input.extraEvents) {
+    for (const extra of input.extraEvents) {
+      events.push({
+        date: extra.date,
+        itemId: "unexpected",
+        itemName: extra.itemName,
+        type: extra.type,
+        cents: extra.cents,
+        isOverridden: false,
+        isReconciled: false,
+        isUnexpected: true,
+      });
+    }
+  }
+
   events.sort((a, b) => a.date.getTime() - b.date.getTime() || a.itemId.localeCompare(b.itemId));
 
   const runningAtEvent: number[] = [];
@@ -212,7 +263,7 @@ export function computeForecast(input: ForecastInput): ForecastResult {
   const snapshotDefs: { label: SnapshotResult["label"]; date: Date }[] = [
     { label: "endOfMonth", date: endOfMonth },
     { label: "endOfYear", date: endOfYear },
-    { label: "oneYearOut", date: horizonEnd },
+    { label: "oneYearOut", date: oneYearOutDate },
   ];
   const snapshots: SnapshotResult[] = snapshotDefs.map(({ label, date }) => {
     let balance = input.startingBalanceCents;

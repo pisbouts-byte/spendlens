@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Pencil,
@@ -10,6 +10,7 @@ import {
   TrendingDown,
   Wallet,
   CalendarClock,
+  ChevronDown,
   X,
 } from "lucide-react";
 import {
@@ -31,6 +32,7 @@ import type {
 } from "@spendlens/shared";
 import { CashFlowType, CashFlowFrequency } from "@spendlens/shared";
 import * as cashflowApi from "../api/cashflow.ts";
+import { monthlyEquivalentTotal } from "../lib/monthlyEquivalent.ts";
 import { Button } from "../components/ui/Button.tsx";
 import { Modal } from "../components/ui/Modal.tsx";
 import { Spinner } from "../components/ui/Spinner.tsx";
@@ -51,6 +53,37 @@ const SNAPSHOT_LABELS: Record<string, string> = {
   endOfYear: "End of This Year",
   oneYearOut: "1 Year From Today",
 };
+
+type ChartDuration = "month" | "quarter" | "year" | "ytd" | "custom";
+
+const DURATION_LABELS: Record<ChartDuration, string> = {
+  month: "Month",
+  quarter: "Quarter",
+  year: "Year",
+  ytd: "Year to Date",
+  custom: "Custom",
+};
+
+const DEFAULT_LOADED_MONTHS = 12;
+
+function currentMonthKey(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function addMonthsToKey(key: string, n: number): string {
+  const [y, m] = key.split("-").map(Number) as [number, number];
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12);
+  const nm = ((total % 12) + 12) % 12;
+  return `${ny}-${String(nm + 1).padStart(2, "0")}`;
+}
+
+function monthKeyDiff(fromKey: string, toKey: string): number {
+  const [fy, fm] = fromKey.split("-").map(Number) as [number, number];
+  const [ty, tm] = toKey.split("-").map(Number) as [number, number];
+  return ty * 12 + (tm - 1) - (fy * 12 + (fm - 1));
+}
 
 function formatCurrency(value: string | number): string {
   const num = typeof value === "string" ? parseFloat(value) : value;
@@ -111,6 +144,15 @@ export function CashFlowPage() {
   const [editingItem, setEditingItem] = useState<CashFlowItem | null>(null);
   const [overrideItem, setOverrideItem] = useState<CashFlowItem | null>(null);
 
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
+  const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
+
+  const [duration, setDuration] = useState<ChartDuration>("year");
+  const [customFrom, setCustomFrom] = useState(currentMonthKey());
+  const [customTo, setCustomTo] = useState(addMonthsToKey(currentMonthKey(), DEFAULT_LOADED_MONTHS - 1));
+  const [loadedMonths, setLoadedMonths] = useState(DEFAULT_LOADED_MONTHS);
+  const [isExtendingRange, setIsExtendingRange] = useState(false);
+
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -120,6 +162,7 @@ export function CashFlowPage() {
         cashflowApi.getBalance(),
       ]);
       setForecast(f);
+      setLoadedMonths(DEFAULT_LOADED_MONTHS);
       setIncomeItems(items.filter((i) => i.type === CashFlowType.INCOME));
       setBillItems(items.filter((i) => i.type === CashFlowType.BILL));
       setBalance(bal);
@@ -135,6 +178,48 @@ export function CashFlowPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // When the custom range extends past what's already loaded, fetch a wider forecast.
+  useEffect(() => {
+    if (duration !== "custom" || !forecast?.balanceConfigured) return;
+    const monthsNeeded = monthKeyDiff(currentMonthKey(), customTo) + 1;
+    if (monthsNeeded <= loadedMonths) return;
+    const capped = Math.min(60, monthsNeeded);
+    setIsExtendingRange(true);
+    cashflowApi
+      .getForecast(capped)
+      .then((f) => {
+        setForecast(f);
+        setLoadedMonths(capped);
+      })
+      .catch(() => toast("error", "Failed to load that date range"))
+      .finally(() => setIsExtendingRange(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, customTo, loadedMonths]);
+
+  const visibleTimeline = useMemo(() => {
+    if (!forecast) return [];
+    switch (duration) {
+      case "month":
+        return forecast.timeline.slice(0, 1);
+      case "quarter":
+        return forecast.timeline.slice(0, 3);
+      case "year":
+        return forecast.timeline.slice(0, 12);
+      case "ytd": {
+        const year = String(new Date().getUTCFullYear());
+        return forecast.timeline.filter((t) => t.month.startsWith(year));
+      }
+      case "custom":
+        return forecast.timeline.filter((t) => t.month >= customFrom && t.month <= customTo);
+      default:
+        return forecast.timeline;
+    }
+  }, [forecast, duration, customFrom, customTo]);
+
+  const monthlyIncomeTotal = useMemo(() => monthlyEquivalentTotal(incomeItems), [incomeItems]);
+  const monthlyBillsTotal = useMemo(() => monthlyEquivalentTotal(billItems), [billItems]);
+  const monthlyDiff = monthlyIncomeTotal - monthlyBillsTotal;
 
   async function handleSaveBalance(e: React.FormEvent) {
     e.preventDefault();
@@ -272,37 +357,136 @@ export function CashFlowPage() {
             })}
           </div>
 
-          {/* Alerts */}
+          {/* Alerts — collapsible, collapsed by default */}
           {forecast.alerts.length > 0 && (
-            <div className="space-y-2">
-              {forecast.alerts.map((a, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4"
-                >
-                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-red-700">
-                      Insufficient funds projected {formatDate(a.startDate)}
-                      {a.endDate ? ` – ${formatDate(a.endDate)}` : " onward"}
-                    </p>
-                    <p className="mt-0.5 text-sm text-red-600">
-                      Balance may drop as low as {formatCurrency(a.lowestBalance)} on{" "}
-                      {formatDate(a.lowestBalanceDate)}
-                    </p>
-                  </div>
+            <div className="rounded-xl border border-red-200 bg-red-50">
+              <button
+                type="button"
+                onClick={() => setAlertsExpanded((v) => !v)}
+                className="flex w-full items-center justify-between gap-3 p-4 text-left"
+              >
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-500" />
+                  <span className="text-sm font-semibold text-red-700">
+                    {forecast.alerts.length} period{forecast.alerts.length > 1 ? "s" : ""} with insufficient
+                    funds projected
+                  </span>
                 </div>
-              ))}
+                <ChevronDown
+                  className={`h-4 w-4 flex-shrink-0 text-red-500 transition-transform ${alertsExpanded ? "rotate-180" : ""}`}
+                />
+              </button>
+              {alertsExpanded && (
+                <div className="space-y-3 border-t border-red-200 px-4 pb-4 pt-3">
+                  {forecast.alerts.map((a, idx) => (
+                    <div key={idx}>
+                      <p className="text-sm font-semibold text-red-700">
+                        {formatDate(a.startDate)}
+                        {a.endDate ? ` – ${formatDate(a.endDate)}` : " onward"}
+                      </p>
+                      <p className="mt-0.5 text-sm text-red-600">
+                        Balance may drop as low as {formatCurrency(a.lowestBalance)} on{" "}
+                        {formatDate(a.lowestBalanceDate)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* 12-month timeline */}
+          {/* Unexpected transactions — reconciled against linked accounts but didn't match a planned item */}
+          {forecast.unexpectedTransactions.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-500" />
+                <span className="text-sm font-semibold text-amber-700">
+                  {forecast.unexpectedTransactions.length} unexpected transaction
+                  {forecast.unexpectedTransactions.length > 1 ? "s" : ""} on linked accounts
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-amber-600">
+                These didn't match a planned income or bill, but are included in your balance.
+              </p>
+              <div className="mt-3 space-y-1.5 border-t border-amber-200 pt-3">
+                {forecast.unexpectedTransactions.map((e, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <span className="text-amber-800">
+                      {e.name} · {formatDate(e.date)}
+                    </span>
+                    <span className={`font-medium ${e.type === "INCOME" ? "text-green-600" : "text-red-600"}`}>
+                      {e.type === "INCOME" ? "+" : "-"}
+                      {formatCurrency(e.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Timeline chart */}
           {forecast.timeline.length > 0 && (
             <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-              <h2 className="text-sm font-semibold text-gray-900">Projected Balance — Next 12 Months</h2>
-              <div className="mt-4 h-64">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-gray-900">
+                  Projected Balance — {DURATION_LABELS[duration]}
+                </h2>
+                <div className="flex flex-wrap items-center gap-1 rounded-lg bg-gray-100 p-1">
+                  {(Object.keys(DURATION_LABELS) as ChartDuration[]).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDuration(d)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        duration === d
+                          ? "bg-white text-gray-900 shadow-sm"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      {DURATION_LABELS[d]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {duration === "custom" && (
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">From</label>
+                    <input
+                      type="month"
+                      value={customFrom}
+                      min={currentMonthKey()}
+                      max={customTo}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">To</label>
+                    <input
+                      type="month"
+                      value={customTo}
+                      min={customFrom}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                  </div>
+                  {isExtendingRange && <Spinner size="sm" />}
+                </div>
+              )}
+
+              <p className="mt-3 text-xs text-gray-400">Click a point on the chart for that month's details</p>
+              <div className="mt-2 h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={forecast.timeline.map((t) => ({ ...t, endingBalanceNum: parseFloat(t.endingBalance) }))}>
+                  <AreaChart
+                    data={visibleTimeline.map((t) => ({ ...t, endingBalanceNum: parseFloat(t.endingBalance) }))}
+                    onClick={(state) => {
+                      const label = state?.activeLabel;
+                      if (label) setDrilldownMonth(String(label));
+                    }}
+                    style={{ cursor: "pointer" }}
+                  >
                     <defs>
                       <linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
@@ -328,6 +512,7 @@ export function CashFlowPage() {
                       stroke="#6366f1"
                       fill="url(#balanceGrad)"
                       strokeWidth={2}
+                      activeDot={{ r: 5 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -342,6 +527,7 @@ export function CashFlowPage() {
         title="Income Sources"
         type={CashFlowType.INCOME}
         items={incomeItems}
+        monthlyTotal={monthlyIncomeTotal}
         onAdd={() => setItemModalType(CashFlowType.INCOME)}
         onEdit={setEditingItem}
         onOverride={setOverrideItem}
@@ -349,11 +535,32 @@ export function CashFlowPage() {
         onToggleActive={handleToggleActive}
       />
 
+      {(monthlyIncomeTotal > 0 || monthlyBillsTotal > 0) && (
+        <div
+          className={`rounded-xl border p-4 text-sm ${
+            monthlyDiff >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+          }`}
+        >
+          {monthlyDiff >= 0 ? (
+            <p className="text-green-700">
+              <span className="font-semibold">{formatCurrency(monthlyDiff)}/month surplus</span> — your
+              recurring income covers your recurring bills with room to spare.
+            </p>
+          ) : (
+            <p className="text-red-700">
+              <span className="font-semibold">{formatCurrency(Math.abs(monthlyDiff))}/month gap</span> — your
+              recurring bills exceed your recurring income by this much.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Bills */}
       <ItemList
         title="Bills"
         type={CashFlowType.BILL}
         items={billItems}
+        monthlyTotal={monthlyBillsTotal}
         onAdd={() => setItemModalType(CashFlowType.BILL)}
         onEdit={setEditingItem}
         onOverride={setOverrideItem}
@@ -397,6 +604,15 @@ export function CashFlowPage() {
           }}
         />
       )}
+
+      {/* Month drill-down modal */}
+      {drilldownMonth && forecast && (
+        <MonthDrilldownModal
+          monthKey={drilldownMonth}
+          forecast={forecast}
+          onClose={() => setDrilldownMonth(null)}
+        />
+      )}
     </div>
   );
 }
@@ -405,6 +621,7 @@ interface ItemListProps {
   title: string;
   type: CashFlowType;
   items: CashFlowItem[];
+  monthlyTotal: number;
   onAdd: () => void;
   onEdit: (item: CashFlowItem) => void;
   onOverride: (item: CashFlowItem) => void;
@@ -412,7 +629,17 @@ interface ItemListProps {
   onToggleActive: (item: CashFlowItem) => void;
 }
 
-function ItemList({ title, type, items, onAdd, onEdit, onOverride, onDelete, onToggleActive }: ItemListProps) {
+function ItemList({
+  title,
+  type,
+  items,
+  monthlyTotal,
+  onAdd,
+  onEdit,
+  onOverride,
+  onDelete,
+  onToggleActive,
+}: ItemListProps) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
       <div className="flex items-center justify-between">
@@ -488,6 +715,12 @@ function ItemList({ title, type, items, onAdd, onEdit, onOverride, onDelete, onT
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {items.length > 0 && (
+        <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-sm">
+          <span className="text-gray-500">Monthly total (recurring)</span>
+          <span className="font-semibold text-gray-900">{formatCurrency(monthlyTotal)}</span>
         </div>
       )}
     </div>
@@ -765,6 +998,116 @@ function OverrideModal({ item, onClose, onSaved }: OverrideModalProps) {
           </div>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+interface MonthDrilldownModalProps {
+  monthKey: string;
+  forecast: CashFlowForecast;
+  onClose: () => void;
+}
+
+function MonthDrilldownModal({ monthKey, forecast, onClose }: MonthDrilldownModalProps) {
+  const idx = forecast.timeline.findIndex((t) => t.month === monthKey);
+  const monthData = forecast.timeline[idx];
+
+  if (!monthData) return null;
+
+  const startingBalance =
+    idx === 0 ? parseFloat(forecast.startingBalance) : parseFloat(forecast.timeline[idx - 1]!.endingBalance);
+  const monthEvents = forecast.events
+    .filter((e) => e.date.slice(0, 7) === monthKey)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const incomeEvents = monthEvents.filter((e) => e.type === "INCOME");
+  const billEvents = monthEvents.filter((e) => e.type === "BILL");
+  const endingBalance = parseFloat(monthData.endingBalance);
+
+  return (
+    <Modal isOpen onClose={onClose} title={formatMonth(monthKey)}>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5 text-sm">
+          <span className="text-gray-500">Starting balance</span>
+          <span className="font-semibold text-gray-900">{formatCurrency(startingBalance)}</span>
+        </div>
+
+        {incomeEvents.length > 0 && (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Income received</h3>
+            <div className="mt-1.5 space-y-1.5">
+              {incomeEvents.map((e, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-1.5 text-gray-600">
+                    {e.name} · {formatDate(e.date)}
+                    {e.isReconciled && (
+                      <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                        Reconciled
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-right">
+                    <span className="font-medium text-green-600">+{formatCurrency(e.amount)}</span>
+                    {e.isReconciled && e.plannedAmount && e.plannedAmount !== e.amount && (
+                      <span className="block text-[10px] text-gray-400">planned {formatCurrency(e.plannedAmount)}</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {billEvents.length > 0 && (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Bills due</h3>
+            <div className="mt-1.5 space-y-1.5">
+              {billEvents.map((e, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-1.5 text-gray-600">
+                    {e.name} · {formatDate(e.date)}
+                    {e.isReconciled && (
+                      <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                        Reconciled
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-right">
+                    <span className="font-medium text-red-600">-{formatCurrency(e.amount)}</span>
+                    {e.isReconciled && e.plannedAmount && e.plannedAmount !== e.amount && (
+                      <span className="block text-[10px] text-gray-400">planned {formatCurrency(e.plannedAmount)}</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {monthEvents.length === 0 && (
+          <p className="text-sm text-gray-400">No income or bills fall in this month.</p>
+        )}
+
+        <div className="space-y-1.5 border-t border-gray-100 pt-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Income total</span>
+            <span className="font-medium text-green-600">+{formatCurrency(monthData.totalIncome)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Bills due total</span>
+            <span className="font-medium text-red-600">-{formatCurrency(monthData.totalBills)}</span>
+          </div>
+          <div
+            className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${
+              endingBalance < 0 ? "border-red-200 bg-red-50" : "border-gray-200 bg-gray-50"
+            }`}
+          >
+            <span className="font-semibold text-gray-700">Ending balance</span>
+            <span className={`font-bold ${endingBalance < 0 ? "text-red-600" : "text-gray-900"}`}>
+              {formatCurrency(monthData.endingBalance)}
+            </span>
+          </div>
+        </div>
+      </div>
     </Modal>
   );
 }

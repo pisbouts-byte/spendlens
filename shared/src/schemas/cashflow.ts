@@ -34,7 +34,12 @@ export const UpdateBillsBalanceSchema = z.object({
   asOf: dateString,
 });
 
+export const ForecastQuerySchema = z.object({
+  months: z.coerce.number().int().min(1).max(60).optional(),
+});
+
 export type CreateCashFlowItemInput = z.infer<typeof CreateCashFlowItemSchema>;
 export type UpdateCashFlowItemInput = z.infer<typeof UpdateCashFlowItemSchema>;
 export type UpsertCashFlowOverrideInput = z.infer<typeof UpsertCashFlowOverrideSchema>;
 export type UpdateBillsBalanceInput = z.infer<typeof UpdateBillsBalanceSchema>;
+export type ForecastQuery = z.infer<typeof ForecastQuerySchema>;

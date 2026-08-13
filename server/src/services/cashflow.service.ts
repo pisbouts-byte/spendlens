@@ -5,8 +5,11 @@ import {
   computeForecast,
   parseUTCDateString,
   formatUTCDate,
+  utcMidnight,
   type CashFlowItemInput,
   type CashFlowFrequencyKind,
+  type CashFlowEventResult,
+  type ExtraEventInput,
 } from "../utils/cashflowForecast.js";
 import type {
   CashFlowType,
@@ -17,6 +20,7 @@ import type {
 } from "@spendlens/shared";
 
 const STALE_BALANCE_DAYS = 7;
+const RECONCILE_DATE_WINDOW_MS = 5 * 86400000;
 
 function dollarsToCents(amount: number): number {
   return Math.round(amount * 100);
@@ -160,7 +164,7 @@ export async function updateBalance(userId: string, input: UpdateBillsBalanceInp
   };
 }
 
-export async function getForecast(userId: string) {
+export async function getForecast(userId: string, horizonMonths?: number) {
   const settings = await prisma.userSettings.findUnique({ where: { userId } });
   if (!settings) {
     throw new NotFoundError("Settings");
@@ -176,6 +180,7 @@ export async function getForecast(userId: string) {
       alerts: [],
       timeline: [],
       events: [],
+      unexpectedTransactions: [],
     };
   }
 
@@ -206,12 +211,35 @@ export async function getForecast(userId: string) {
 
   const asOfDate = settings.billsAccountBalanceAsOf;
   const today = new Date();
-  const result = computeForecast({
+  const startingBalanceCents = dollarsToCents(settings.billsAccountBalance.toNumber());
+
+  const plannedResult = computeForecast({
     items: engineItems,
-    startingBalanceCents: dollarsToCents(settings.billsAccountBalance.toNumber()),
+    startingBalanceCents,
     asOfDate,
     today,
+    horizonMonths,
   });
+
+  const { reconciledAmounts, extraEvents, unexpectedTransactions } = await buildReconciliation(
+    userId,
+    asOfDate,
+    today,
+    plannedResult.events,
+  );
+
+  const result =
+    reconciledAmounts.size === 0 && extraEvents.length === 0
+      ? plannedResult
+      : computeForecast({
+          items: engineItems,
+          startingBalanceCents,
+          asOfDate,
+          today,
+          horizonMonths,
+          reconciledAmounts,
+          extraEvents,
+        });
 
   const staleDays = Math.floor((Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - asOfDate.getTime()) / 86400000);
 
@@ -241,7 +269,97 @@ export async function getForecast(userId: string) {
       endingBalance: centsToDollars(m.endingBalanceCents),
     })),
     events: result.events.map(formatEvent),
+    unexpectedTransactions,
   };
+}
+
+/**
+ * Matches real transactions on cash-flow-linked accounts against this forecast's planned
+ * occurrences (fuzzy date/amount match), and surfaces anything left over as unexpected.
+ * Computed fresh on every call — no persisted reconciliation state.
+ */
+async function buildReconciliation(
+  userId: string,
+  asOfDate: Date,
+  today: Date,
+  plannedEvents: CashFlowEventResult[],
+): Promise<{
+  reconciledAmounts: Map<string, number>;
+  extraEvents: ExtraEventInput[];
+  unexpectedTransactions: ReturnType<typeof formatEvent>[];
+}> {
+  const empty = { reconciledAmounts: new Map<string, number>(), extraEvents: [] as ExtraEventInput[], unexpectedTransactions: [] as ReturnType<typeof formatEvent>[] };
+
+  const mappedAccounts = await prisma.plaidAccount.findMany({
+    where: { includeInCashFlow: true, plaidItem: { userId } },
+    select: { id: true },
+  });
+  if (mappedAccounts.length === 0) return empty;
+
+  const windowEnd = utcMidnight(today);
+  if (windowEnd.getTime() <= asOfDate.getTime()) return empty;
+
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      userId,
+      plaidAccountId: { in: mappedAccounts.map((a) => a.id) },
+      isPending: false,
+      date: { gt: asOfDate, lte: windowEnd },
+    },
+  });
+  if (transactions.length === 0) return empty;
+
+  const used = new Set<string>();
+  const reconciledAmounts = new Map<string, number>();
+  const pastPlanned = plannedEvents.filter((e) => e.date.getTime() <= windowEnd.getTime());
+
+  for (const occ of pastPlanned) {
+    const wantPositive = occ.type === "BILL";
+    let best: { txn: (typeof transactions)[number]; dateDiff: number; amtDiff: number } | null = null;
+    for (const txn of transactions) {
+      if (used.has(txn.id)) continue;
+      const amt = txn.amount.toNumber();
+      if (wantPositive ? amt <= 0 : amt >= 0) continue;
+      const dateDiff = Math.abs(txn.date.getTime() - occ.date.getTime());
+      if (dateDiff > RECONCILE_DATE_WINDOW_MS) continue;
+      const expectedCents = Math.abs(occ.cents);
+      const actualCents = Math.round(Math.abs(amt) * 100);
+      const tolerance = Math.max(1000, expectedCents * 0.1);
+      const amtDiff = Math.abs(actualCents - expectedCents);
+      if (amtDiff > tolerance) continue;
+      if (!best || dateDiff < best.dateDiff || (dateDiff === best.dateDiff && amtDiff < best.amtDiff)) {
+        best = { txn, dateDiff, amtDiff };
+      }
+    }
+    if (best) {
+      used.add(best.txn.id);
+      const actualCents = Math.round(best.txn.amount.toNumber() * 100);
+      const signedCents = occ.type === "INCOME" ? Math.abs(actualCents) : -Math.abs(actualCents);
+      reconciledAmounts.set(`${occ.itemId}|${formatUTCDate(occ.date)}`, signedCents);
+    }
+  }
+
+  const unmatched = transactions.filter((t) => !used.has(t.id));
+  const extraEvents: ExtraEventInput[] = unmatched.map((t) => ({
+    date: t.date,
+    itemName: t.merchantName || t.originalName,
+    type: t.amount.toNumber() > 0 ? "BILL" : "INCOME",
+    cents: -Math.round(t.amount.toNumber() * 100),
+  }));
+  const unexpectedTransactions = unmatched.map((t) =>
+    formatEvent({
+      date: t.date,
+      itemId: t.id,
+      itemName: t.merchantName || t.originalName,
+      type: t.amount.toNumber() > 0 ? "BILL" : "INCOME",
+      cents: -Math.round(t.amount.toNumber() * 100),
+      isOverridden: false,
+      isReconciled: false,
+      isUnexpected: true,
+    }),
+  );
+
+  return { reconciledAmounts, extraEvents, unexpectedTransactions };
 }
 
 function formatEvent(ev: {
@@ -251,6 +369,9 @@ function formatEvent(ev: {
   type: "INCOME" | "BILL";
   cents: number;
   isOverridden: boolean;
+  isReconciled: boolean;
+  isUnexpected: boolean;
+  plannedCents?: number;
 }) {
   return {
     date: formatUTCDate(ev.date),
@@ -259,5 +380,8 @@ function formatEvent(ev: {
     type: ev.type,
     amount: centsToDollars(Math.abs(ev.cents)),
     isOverridden: ev.isOverridden,
+    isReconciled: ev.isReconciled,
+    isUnexpected: ev.isUnexpected,
+    ...(ev.plannedCents !== undefined ? { plannedAmount: centsToDollars(Math.abs(ev.plannedCents)) } : {}),
   };
 }

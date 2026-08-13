@@ -26,6 +26,7 @@ export function ConnectedAccounts() {
   const [showHistory, setShowHistory] = useState(false);
   const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [savingAccountId, setSavingAccountId] = useState<string | null>(null);
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -83,6 +84,29 @@ export function ConnectedAccounts() {
       toast("error", "Failed to load sync history");
     } finally {
       setLoadingLogs(false);
+    }
+  }
+
+  async function handleToggleAccountSetting(
+    accountId: string,
+    field: "includeInCashFlow" | "includeInSpending",
+    value: boolean,
+  ) {
+    setSavingAccountId(accountId);
+    try {
+      const updated = await plaidApi.updateAccountSettings(accountId, { [field]: value });
+      setItems((prev) =>
+        prev.map((item) => ({
+          ...item,
+          accounts: item.accounts.map((account) =>
+            account.id === accountId ? { ...account, ...updated } : account,
+          ),
+        })),
+      );
+    } catch {
+      toast("error", "Failed to update account setting");
+    } finally {
+      setSavingAccountId(null);
     }
   }
 
@@ -213,10 +237,10 @@ export function ConnectedAccounts() {
                 {item.accounts.map((account) => (
                   <div
                     key={account.id}
-                    className="flex items-center gap-3 px-5 py-3"
+                    className="flex flex-wrap items-center gap-3 px-5 py-3"
                   >
-                    <CreditCard className="h-4 w-4 text-gray-400" />
-                    <div className="flex-1">
+                    <CreditCard className="h-4 w-4 shrink-0 text-gray-400" />
+                    <div className="flex-1 min-w-[120px]">
                       <span className="text-sm font-medium text-gray-700">
                         {account.name}
                       </span>
@@ -229,6 +253,44 @@ export function ConnectedAccounts() {
                     <span className="text-xs text-gray-400 capitalize">
                       {account.subtype || account.type}
                     </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() =>
+                          handleToggleAccountSetting(
+                            account.id,
+                            "includeInCashFlow",
+                            !account.includeInCashFlow,
+                          )
+                        }
+                        disabled={savingAccountId === account.id}
+                        title="Include this account's transactions in Cash Flow reconciliation"
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                          account.includeInCashFlow
+                            ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                        }`}
+                      >
+                        Cash Flow
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleToggleAccountSetting(
+                            account.id,
+                            "includeInSpending",
+                            !account.includeInSpending,
+                          )
+                        }
+                        disabled={savingAccountId === account.id}
+                        title="Include this account's transactions in spending tracking"
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                          account.includeInSpending
+                            ? "bg-green-100 text-green-700 hover:bg-green-200"
+                            : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                        }`}
+                      >
+                        Spending
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

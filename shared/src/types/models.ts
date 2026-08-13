@@ -4,6 +4,7 @@ import type {
   RecurringFrequency,
   CashFlowType,
   CashFlowFrequency,
+  FiftyThirtyTwentyCategory,
 } from "./enums.js";
 
 export interface User {
@@ -44,6 +45,8 @@ export interface PlaidAccount {
   type: string;
   subtype: string | null;
   mask: string | null;
+  includeInCashFlow: boolean;
+  includeInSpending: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -151,6 +154,25 @@ export interface CashFlowItem {
   overrides?: CashFlowOverride[];
 }
 
+export interface FiftyThirtyTwentyItem {
+  id: string;
+  userId: string;
+  category: FiftyThirtyTwentyCategory;
+  name: string;
+  amount: string;
+  frequency: CashFlowFrequency;
+  isActive: boolean;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BudgetCarryoverInfo {
+  amount: string;
+  sourcePeriodStart: string;
+  sourceOverage: string;
+}
+
 export interface BudgetProgress {
   budget: Budget;
   spent: string;
@@ -158,4 +180,7 @@ export interface BudgetProgress {
   percentage: number;
   periodStart: string;
   periodEnd: string;
+  adjustedAmount: string;
+  carryoverIn: BudgetCarryoverInfo | null;
+  carriedOverTo: string | null;
 }

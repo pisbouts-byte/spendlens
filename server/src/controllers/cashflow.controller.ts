@@ -77,7 +77,8 @@ export async function updateBalance(req: Request, res: Response, next: NextFunct
 
 export async function getForecast(req: Request, res: Response, next: NextFunction) {
   try {
-    const forecast = await cashflowService.getForecast(req.userId!);
+    const months = req.query.months as number | undefined;
+    const forecast = await cashflowService.getForecast(req.userId!, months);
     res.json({ success: true, data: forecast });
   } catch (error) {
     next(error);

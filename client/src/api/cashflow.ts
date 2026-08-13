@@ -58,7 +58,9 @@ export async function updateBalance(input: UpdateBillsBalanceInput): Promise<Cas
   return data.data;
 }
 
-export async function getForecast(): Promise<CashFlowForecast> {
-  const { data } = await client.get<ApiResponse<CashFlowForecast>>("/cashflow/forecast");
+export async function getForecast(months?: number): Promise<CashFlowForecast> {
+  const { data } = await client.get<ApiResponse<CashFlowForecast>>("/cashflow/forecast", {
+    params: months ? { months } : undefined,
+  });
   return data.data;
 }

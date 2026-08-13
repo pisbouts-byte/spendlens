@@ -9,9 +9,11 @@ export type {
   CategoryCorrection,
   Budget,
   BudgetProgress,
+  BudgetCarryoverInfo,
   RecurringPattern,
   CashFlowItem,
   CashFlowOverride,
+  FiftyThirtyTwentyItem,
 } from "./types/models.js";
 
 export type {
@@ -38,6 +40,7 @@ export {
   RecurringFrequency,
   CashFlowType,
   CashFlowFrequency,
+  FiftyThirtyTwentyCategory,
 } from "./types/enums.js";
 
 // Schemas
@@ -65,9 +68,11 @@ export {
   CreateBudgetSchema,
   UpdateBudgetSchema,
   BudgetProgressQuerySchema,
+  CarryOverBudgetSchema,
   type CreateBudgetInput,
   type UpdateBudgetInput,
   type BudgetProgressQuery,
+  type CarryOverBudgetInput,
 } from "./schemas/budget.js";
 
 export {
@@ -91,11 +96,25 @@ export {
   UpdateCashFlowItemSchema,
   UpsertCashFlowOverrideSchema,
   UpdateBillsBalanceSchema,
+  ForecastQuerySchema,
   type CreateCashFlowItemInput,
   type UpdateCashFlowItemInput,
   type UpsertCashFlowOverrideInput,
   type UpdateBillsBalanceInput,
+  type ForecastQuery,
 } from "./schemas/cashflow.js";
+
+export {
+  CreateFiftyThirtyTwentyItemSchema,
+  UpdateFiftyThirtyTwentyItemSchema,
+  type CreateFiftyThirtyTwentyItemInput,
+  type UpdateFiftyThirtyTwentyItemInput,
+} from "./schemas/fiftyThirtyTwenty.js";
+
+export {
+  UpdatePlaidAccountSettingsSchema,
+  type UpdatePlaidAccountSettingsInput,
+} from "./schemas/plaid.js";
 
 // Constants
 export { DEFAULT_CATEGORIES } from "./constants/categories.js";
