@@ -42,3 +42,11 @@ export async function getBudgetProgress(params?: {
   );
   return data.data;
 }
+
+export async function carryOverBudget(budgetId: string, periodStart: string): Promise<void> {
+  await client.post(`/budgets/${budgetId}/carryover`, { periodStart });
+}
+
+export async function removeCarryover(budgetId: string, periodStart: string): Promise<void> {
+  await client.delete(`/budgets/${budgetId}/carryover/${periodStart}`);
+}

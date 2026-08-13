@@ -52,3 +52,29 @@ export async function getBudgetProgress(req: Request, res: Response, next: NextF
     next(error);
   }
 }
+
+export async function carryOverBudget(req: Request, res: Response, next: NextFunction) {
+  try {
+    const carryover = await budgetService.carryOverBudget(
+      req.userId!,
+      req.params.id as string,
+      req.body.periodStart,
+    );
+    res.status(201).json({ success: true, data: carryover });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function removeCarryover(req: Request, res: Response, next: NextFunction) {
+  try {
+    await budgetService.removeCarryover(
+      req.userId!,
+      req.params.id as string,
+      req.params.periodStart as string,
+    );
+    res.json({ success: true, data: null });
+  } catch (error) {
+    next(error);
+  }
+}

@@ -113,28 +113,25 @@ export async function getBudgetProgress(
         referenceDate,
         weekStartDay,
       );
+      const periodKey = formatDateKey(periodStart);
 
-      // Calculate spent amount for this period
-      const txnWhere: Prisma.TransactionWhereInput = {
-        userId,
-        isExcluded: false,
-        date: { gte: periodStart, lte: periodEnd },
-        amount: { gt: 0 }, // Only expenses (positive amounts in Plaid = spending)
-      };
-
-      if (budget.categoryId) {
-        txnWhere.categoryId = budget.categoryId;
-      }
-
-      const aggregate = await prisma.transaction.aggregate({
-        where: txnWhere,
-        _sum: { amount: true },
-      });
-
-      const spent = aggregate._sum.amount?.toNumber() ?? 0;
+      const spent = await getSpendForPeriod(userId, budget, periodStart, periodEnd);
       const budgetAmount = budget.amount.toNumber();
-      const remaining = Math.max(0, budgetAmount - spent);
-      const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
+
+      const [carryoverIn, carriedOverOut] = await Promise.all([
+        prisma.budgetCarryover.findUnique({
+          where: { budgetId_periodStart: { budgetId: budget.id, periodStart: periodKey } },
+        }),
+        prisma.budgetCarryover.findFirst({
+          where: { budgetId: budget.id, sourcePeriodStart: periodKey },
+        }),
+      ]);
+
+      const carryoverAmount = carryoverIn ? carryoverIn.amount.toNumber() : 0;
+      const adjustedAmount = budgetAmount + carryoverAmount;
+      const remaining = Math.max(0, adjustedAmount - spent);
+      const percentageDivisor = Math.max(adjustedAmount, 0.01);
+      const percentage = (spent / percentageDivisor) * 100;
 
       return {
         budget: {
@@ -151,11 +148,123 @@ export async function getBudgetProgress(
         percentage: Math.round(percentage * 100) / 100,
         periodStart: periodStart.toISOString(),
         periodEnd: periodEnd.toISOString(),
+        adjustedAmount: adjustedAmount.toFixed(2),
+        carryoverIn: carryoverIn
+          ? {
+              amount: carryoverIn.amount.toString(),
+              sourcePeriodStart: carryoverIn.sourcePeriodStart,
+              sourceOverage: carryoverIn.sourceOverage.toString(),
+            }
+          : null,
+        carriedOverTo: carriedOverOut ? carriedOverOut.periodStart : null,
       };
     }),
   );
 
   return results;
+}
+
+export async function carryOverBudget(userId: string, budgetId: string, periodStartKey: string) {
+  const budget = await prisma.budget.findFirst({ where: { id: budgetId, userId } });
+  if (!budget) {
+    throw new NotFoundError("Budget");
+  }
+
+  const settings = await prisma.userSettings.findUnique({ where: { userId } });
+  const weekStartDay = settings?.weekStartDay ?? 1;
+
+  const referenceDate = parseDateKeyLocal(periodStartKey);
+  const { periodStart, periodEnd } = getPeriodBounds(budget.type, referenceDate, weekStartDay);
+
+  if (periodEnd.getTime() > Date.now()) {
+    throw new BadRequestError("Can't carry over a period that hasn't ended yet");
+  }
+
+  const spend = await getSpendForPeriod(userId, budget, periodStart, periodEnd);
+  const overage = spend - budget.amount.toNumber();
+  if (overage <= 0) {
+    throw new BadRequestError("This period wasn't over budget");
+  }
+
+  const { periodStart: nextStart } = getNextPeriodBounds(budget.type, periodEnd, weekStartDay);
+  const nextPeriodKey = formatDateKey(nextStart);
+  const sourcePeriodKey = formatDateKey(periodStart);
+
+  const carryover = await prisma.budgetCarryover.upsert({
+    where: { budgetId_periodStart: { budgetId, periodStart: nextPeriodKey } },
+    create: {
+      budgetId,
+      periodStart: nextPeriodKey,
+      amount: -overage,
+      sourcePeriodStart: sourcePeriodKey,
+      sourceOverage: overage,
+    },
+    update: {
+      amount: -overage,
+      sourcePeriodStart: sourcePeriodKey,
+      sourceOverage: overage,
+    },
+  });
+
+  return {
+    ...carryover,
+    amount: carryover.amount.toString(),
+    sourceOverage: carryover.sourceOverage.toString(),
+  };
+}
+
+export async function removeCarryover(userId: string, budgetId: string, periodStartKey: string) {
+  const budget = await prisma.budget.findFirst({ where: { id: budgetId, userId } });
+  if (!budget) {
+    throw new NotFoundError("Budget");
+  }
+  await prisma.budgetCarryover.deleteMany({ where: { budgetId, periodStart: periodStartKey } });
+}
+
+async function getSpendForPeriod(
+  userId: string,
+  budget: { categoryId: string | null },
+  periodStart: Date,
+  periodEnd: Date,
+): Promise<number> {
+  const txnWhere: Prisma.TransactionWhereInput = {
+    userId,
+    isExcluded: false,
+    date: { gte: periodStart, lte: periodEnd },
+    amount: { gt: 0 }, // Only expenses (positive amounts in Plaid = spending)
+  };
+
+  if (budget.categoryId) {
+    txnWhere.categoryId = budget.categoryId;
+  }
+
+  const aggregate = await prisma.transaction.aggregate({
+    where: txnWhere,
+    _sum: { amount: true },
+  });
+
+  return aggregate._sum.amount?.toNumber() ?? 0;
+}
+
+function formatDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseDateKeyLocal(key: string): Date {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y as number, (m as number) - 1, d as number);
+}
+
+function getNextPeriodBounds(
+  type: string,
+  currentPeriodEnd: Date,
+  weekStartDay: number,
+): { periodStart: Date; periodEnd: Date } {
+  const dayAfter = new Date(currentPeriodEnd.getTime() + 1);
+  return getPeriodBounds(type, dayAfter, weekStartDay);
 }
 
 function getPeriodBounds(

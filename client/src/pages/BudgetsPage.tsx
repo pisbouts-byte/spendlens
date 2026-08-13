@@ -10,6 +10,8 @@ import {
   Play,
   ChevronLeft,
   ChevronRight,
+  CornerDownRight,
+  RotateCcw,
 } from "lucide-react";
 import type {
   Budget,
@@ -45,6 +47,22 @@ function getOffsetDate(type: "MONTHLY" | "WEEKLY", offset: number): { date: Date
   weekEnd.setDate(weekStart.getDate() + 6);
   const label = `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
   return { date: d, label };
+}
+
+// Local YYYY-MM-DD key for a period boundary, matching the server's own local-time period math.
+function formatDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatDateLabel(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y as number, (m as number) - 1, d as number).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export function BudgetsPage() {
@@ -106,7 +124,7 @@ export function BudgetsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [viewType, toast]);
+  }, [viewType, periodOffset, toast]);
 
   useEffect(() => {
     fetchData();
@@ -194,6 +212,32 @@ export function BudgetsPage() {
       toast("success", budget.isActive ? "Budget paused" : "Budget resumed");
     } catch {
       toast("error", "Failed to update budget");
+    }
+  }
+
+  async function handleCarryOver(budgetId: string, periodStart: string, overAmount: number) {
+    if (
+      !confirm(
+        `Carry over $${overAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} to next period? This will reduce next period's budget by that amount.`,
+      )
+    )
+      return;
+    try {
+      await budgetsApi.carryOverBudget(budgetId, periodStart);
+      toast("success", "Overage carried over to next period");
+      await fetchData();
+    } catch {
+      toast("error", "Failed to carry over budget");
+    }
+  }
+
+  async function handleRemoveCarryover(budgetId: string, targetPeriodStart: string) {
+    try {
+      await budgetsApi.removeCarryover(budgetId, targetPeriodStart);
+      toast("success", "Carryover removed");
+      await fetchData();
+    } catch {
+      toast("error", "Failed to remove carryover");
     }
   }
 
@@ -349,11 +393,14 @@ export function BudgetsPage() {
         ) : (
           progress.map((item) => {
             const pct = Math.min(item.percentage, 100);
-            const budgetAmt = parseFloat(item.budget.amount);
+            const baseBudgetAmt = parseFloat(item.budget.amount);
+            const budgetAmt = parseFloat(item.adjustedAmount);
             const spentAmt = parseFloat(item.spent);
             const remainingAmt = parseFloat(item.remaining);
             const isOver = item.percentage >= 100;
             const isWarning = item.percentage >= 80 && !isOver;
+            const periodHasEnded = new Date(item.periodEnd).getTime() < Date.now();
+            const periodStartKey = formatDateKey(new Date(item.periodStart));
 
             return (
               <div
@@ -479,6 +526,54 @@ export function BudgetsPage() {
                       </span>
                     )}
                   </div>
+
+                  {item.carryoverIn && (
+                    <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
+                      <span className="flex items-center gap-1">
+                        <CornerDownRight className="h-3.5 w-3.5" />
+                        Includes ${Math.abs(parseFloat(item.carryoverIn.amount)).toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                        })}{" "}
+                        carried over from {formatDateLabel(item.carryoverIn.sourcePeriodStart)} (was $
+                        {baseBudgetAmt.toLocaleString("en-US", { minimumFractionDigits: 2 })})
+                      </span>
+                      <button
+                        onClick={() => handleRemoveCarryover(item.budget.id, periodStartKey)}
+                        className="ml-2 flex-shrink-0 rounded p-1 text-amber-600 hover:bg-amber-100"
+                        title="Remove carryover"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {item.carriedOverTo ? (
+                    <div className="mt-2 flex items-center justify-between rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs text-gray-500">
+                      <span>Overage carried over to next period</span>
+                      <button
+                        onClick={() => handleRemoveCarryover(item.budget.id, item.carriedOverTo!)}
+                        className="ml-2 flex-shrink-0 rounded p-1 text-gray-500 hover:bg-gray-200"
+                        title="Undo carryover"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    isOver &&
+                    periodHasEnded && (
+                      <button
+                        onClick={() =>
+                          handleCarryOver(item.budget.id, periodStartKey, spentAmt - budgetAmt)
+                        }
+                        className="mt-2 flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+                      >
+                        <CornerDownRight className="h-3.5 w-3.5" />
+                        Carry over $
+                        {(spentAmt - budgetAmt).toLocaleString("en-US", { minimumFractionDigits: 2 })} to
+                        next period
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
             );

@@ -3,6 +3,7 @@ import {
   CreateBudgetSchema,
   UpdateBudgetSchema,
   BudgetProgressQuerySchema,
+  CarryOverBudgetSchema,
 } from "@spendlens/shared";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -33,5 +34,13 @@ router.patch(
 );
 
 router.delete("/:id", budgetController.deleteBudget);
+
+router.post(
+  "/:id/carryover",
+  validateRequest({ body: CarryOverBudgetSchema }),
+  budgetController.carryOverBudget,
+);
+
+router.delete("/:id/carryover/:periodStart", budgetController.removeCarryover);
 
 export default router;
