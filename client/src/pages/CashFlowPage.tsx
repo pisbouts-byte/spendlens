@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Plus,
   Pencil,
@@ -11,6 +12,9 @@ import {
   Wallet,
   CalendarClock,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Check,
   X,
 } from "lucide-react";
 import {
@@ -25,6 +29,7 @@ import {
 } from "recharts";
 import type {
   CashFlowItem,
+  CashFlowEvent,
   CashFlowForecast,
   CashFlowBalance,
   CreateCashFlowItemInput,
@@ -153,8 +158,13 @@ export function CashFlowPage() {
   const [loadedMonths, setLoadedMonths] = useState(DEFAULT_LOADED_MONTHS);
   const [isExtendingRange, setIsExtendingRange] = useState(false);
 
+  const hasLoadedRef = useRef(false);
+
   const fetchData = useCallback(async () => {
-    setIsLoading(true);
+    // Only show the full-page spinner on the very first load — refetching after an in-place
+    // action (marking paid, saving an item) shouldn't unmount and reset section-local state
+    // like the "This Month" selector.
+    if (!hasLoadedRef.current) setIsLoading(true);
     try {
       const [f, items, bal] = await Promise.all([
         cashflowApi.getForecast(),
@@ -172,6 +182,7 @@ export function CashFlowPage() {
       toast("error", "Failed to load cash flow data");
     } finally {
       setIsLoading(false);
+      hasLoadedRef.current = true;
     }
   }, [toast]);
 
@@ -284,40 +295,58 @@ export function CashFlowPage() {
           <Wallet className="h-4 w-4 text-brand-600" />
           Bills Account Balance
         </div>
-        <form onSubmit={handleSaveBalance} className="mt-3 flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Balance ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={balanceAmount}
-              onChange={(e) => setBalanceAmount(e.target.value)}
-              placeholder="0.00"
-              className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              required
-            />
+        {balance?.isAutoSynced ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(balance.balance ?? "0")}</p>
+              <p className="mt-0.5 text-xs text-gray-400">
+                Synced from linked accounts{balance.asOf ? ` · as of ${formatDate(balance.asOf)}` : ""}
+              </p>
+            </div>
+            <Link to="/accounts" className="text-xs font-medium text-brand-600 hover:underline">
+              Manage linked accounts
+            </Link>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">As of</label>
-            <input
-              type="date"
-              value={balanceAsOf}
-              onChange={(e) => setBalanceAsOf(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              required
-            />
-          </div>
-          <Button type="submit" size="sm" isLoading={isSavingBalance}>
-            Save
-          </Button>
-        </form>
-        {forecast?.isStale && (
+        ) : (
+          <form onSubmit={handleSaveBalance} className="mt-3 flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Balance ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={balanceAmount}
+                onChange={(e) => setBalanceAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">As of</label>
+              <input
+                type="date"
+                value={balanceAsOf}
+                onChange={(e) => setBalanceAsOf(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                required
+              />
+            </div>
+            <Button type="submit" size="sm" isLoading={isSavingBalance}>
+              Save
+            </Button>
+          </form>
+        )}
+        {forecast?.isStale && !balance?.isAutoSynced && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-600">
             <AlertTriangle className="h-3.5 w-3.5" />
             This balance is more than a week old — the forecast may be off. Update it for an accurate picture.
           </p>
         )}
       </div>
+
+      {forecast?.balanceConfigured && (
+        <MonthlyStatusSection forecast={forecast} onChanged={fetchData} />
+      )}
 
       {!forecast?.balanceConfigured ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
@@ -612,6 +641,155 @@ export function CashFlowPage() {
           forecast={forecast}
           onClose={() => setDrilldownMonth(null)}
         />
+      )}
+    </div>
+  );
+}
+
+interface MonthlyStatusSectionProps {
+  forecast: CashFlowForecast;
+  onChanged: () => void | Promise<void>;
+}
+
+function MonthlyStatusSection({ forecast, onChanged }: MonthlyStatusSectionProps) {
+  const { toast } = useToast();
+  const [statusMonth, setStatusMonth] = useState(currentMonthKey());
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
+
+  const monthKeys = useMemo(() => forecast.timeline.map((t) => t.month), [forecast.timeline]);
+  const minMonth = monthKeys[0];
+  const maxMonth = monthKeys[monthKeys.length - 1];
+
+  const monthEvents = useMemo(
+    () =>
+      forecast.events
+        .filter((e) => e.date.slice(0, 7) === statusMonth)
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    [forecast.events, statusMonth],
+  );
+  const monthUnexpected = useMemo(
+    () => forecast.unexpectedTransactions.filter((e) => e.date.slice(0, 7) === statusMonth),
+    [forecast.unexpectedTransactions, statusMonth],
+  );
+
+  const paidCount = monthEvents.filter((e) => e.isPaid).length;
+  const canGoPrev = !!minMonth && monthKeyDiff(minMonth, statusMonth) > 0;
+  const canGoNext = !!maxMonth && monthKeyDiff(statusMonth, maxMonth) > 0;
+
+  async function handleTogglePaid(event: CashFlowEvent) {
+    if (event.isReconciled) return; // Plaid-driven, not manually toggleable
+    const key = `${event.cashFlowItemId}|${event.date}`;
+    setTogglingKey(key);
+    try {
+      if (event.isPaid) {
+        await cashflowApi.unmarkPaid(event.cashFlowItemId, event.date);
+      } else {
+        await cashflowApi.markPaid(event.cashFlowItemId, event.date);
+      }
+      await onChanged();
+    } catch {
+      toast("error", "Failed to update payment status");
+    } finally {
+      setTogglingKey(null);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => canGoPrev && setStatusMonth(addMonthsToKey(statusMonth, -1))}
+            disabled={!canGoPrev}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <h2 className="text-sm font-semibold text-gray-900">{formatMonth(statusMonth)}</h2>
+          <button
+            onClick={() => canGoNext && setStatusMonth(addMonthsToKey(statusMonth, 1))}
+            disabled={!canGoNext}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        {monthEvents.length > 0 && (
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+            {paidCount} of {monthEvents.length} paid
+          </span>
+        )}
+      </div>
+
+      {monthEvents.length === 0 ? (
+        <p className="mt-4 text-sm text-gray-400">Nothing due or expected this month.</p>
+      ) : (
+        <div className="mt-3 space-y-1.5">
+          {monthEvents.map((e, i) => {
+            const key = `${e.cashFlowItemId}|${e.date}`;
+            const isToggling = togglingKey === key;
+            return (
+              <div key={i} className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2.5">
+                <button
+                  onClick={() => handleTogglePaid(e)}
+                  disabled={e.isReconciled || isToggling}
+                  title={
+                    e.isReconciled
+                      ? "Reconciled from your linked account"
+                      : e.isPaid
+                        ? "Mark as unpaid"
+                        : "Mark as paid"
+                  }
+                  className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors disabled:opacity-60 ${
+                    e.isPaid
+                      ? "border-green-500 bg-green-500 text-white"
+                      : "border-gray-300 text-transparent hover:border-gray-400"
+                  } ${e.isReconciled ? "cursor-default" : "cursor-pointer"}`}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-medium text-gray-900">{e.name}</span>
+                    {e.isReconciled && (
+                      <span className="flex-shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                        Reconciled
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400">{formatDate(e.date)}</p>
+                </div>
+                <span
+                  className={`flex-shrink-0 text-sm font-semibold ${e.type === "INCOME" ? "text-green-600" : "text-gray-900"}`}
+                >
+                  {e.type === "INCOME" ? "+" : "-"}
+                  {formatCurrency(e.amount)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {monthUnexpected.length > 0 && (
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-600">
+            Unrecognized this month
+          </h3>
+          <div className="mt-2 space-y-1.5">
+            {monthUnexpected.map((e, i) => (
+              <div key={i} className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm">
+                <span className="text-amber-800">
+                  {e.name} · {formatDate(e.date)}
+                </span>
+                <span className={`font-medium ${e.type === "INCOME" ? "text-green-600" : "text-red-600"}`}>
+                  {e.type === "INCOME" ? "+" : "-"}
+                  {formatCurrency(e.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

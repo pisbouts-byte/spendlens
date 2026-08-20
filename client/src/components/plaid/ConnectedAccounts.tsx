@@ -18,6 +18,10 @@ import { useToast } from "../ui/Toast.tsx";
 import { PlaidLinkButton } from "./PlaidLinkButton.tsx";
 import { ReconnectButton } from "./ReconnectButton.tsx";
 
+function formatCurrency(value: string): string {
+  return parseFloat(value).toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
 export function ConnectedAccounts() {
   const { toast } = useToast();
   const [items, setItems] = useState<PlaidItemWithAccounts[]>([]);
@@ -253,6 +257,11 @@ export function ConnectedAccounts() {
                     <span className="text-xs text-gray-400 capitalize">
                       {account.subtype || account.type}
                     </span>
+                    {account.currentBalance !== null && (
+                      <span className="text-sm font-medium text-gray-700">
+                        {formatCurrency(account.currentBalance)}
+                      </span>
+                    )}
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() =>

@@ -47,6 +47,8 @@ export interface PlaidAccount {
   mask: string | null;
   includeInCashFlow: boolean;
   includeInSpending: boolean;
+  currentBalance: string | null;
+  balanceUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -57,6 +57,24 @@ export async function deleteOverride(req: Request, res: Response, next: NextFunc
   }
 }
 
+export async function markPaid(req: Request, res: Response, next: NextFunction) {
+  try {
+    await cashflowService.markPaid(req.userId!, req.params.id as string, req.body.occurrenceDate);
+    res.json({ success: true, data: null });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function unmarkPaid(req: Request, res: Response, next: NextFunction) {
+  try {
+    await cashflowService.unmarkPaid(req.userId!, req.params.id as string, req.params.occurrenceDate as string);
+    res.json({ success: true, data: null });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getBalance(req: Request, res: Response, next: NextFunction) {
   try {
     const balance = await cashflowService.getBalance(req.userId!);

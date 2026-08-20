@@ -63,6 +63,7 @@ export interface RecurringSummary {
 export interface CashFlowBalance {
   balance: string | null;
   asOf: string | null;
+  isAutoSynced: boolean;
 }
 
 export interface CashFlowEvent {
@@ -74,6 +75,7 @@ export interface CashFlowEvent {
   isOverridden: boolean;
   isReconciled: boolean;
   isUnexpected: boolean;
+  isPaid: boolean;
   plannedAmount?: string;
 }
 
@@ -105,6 +107,7 @@ export interface CashFlowForecast {
   startingBalance: string;
   asOf: string | null;
   isStale: boolean;
+  isAutoSynced: boolean;
   snapshots: CashFlowSnapshot[];
   alerts: CashFlowAlert[];
   timeline: CashFlowMonthSummary[];

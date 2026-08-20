@@ -10,6 +10,7 @@ import { env } from "../config/env.js";
 import { encrypt, decrypt } from "../utils/encryption.js";
 import { NotFoundError, BadRequestError } from "../utils/errors.js";
 import { applyRules, reconcileManualTransactions } from "./transaction.service.js";
+import { refreshCashFlowBalanceFromPlaid } from "./cashflow.service.js";
 
 const plaidEnvMap: Record<string, string> = {
   sandbox: PlaidEnvironments.sandbox,
@@ -100,6 +101,8 @@ export async function exchangeToken(
           type: account.type,
           subtype: account.subtype ?? null,
           mask: account.mask ?? null,
+          currentBalance: account.balances.current ?? null,
+          balanceUpdatedAt: new Date(),
         },
         create: {
           plaidItemId: plaidItem.id,
@@ -109,6 +112,8 @@ export async function exchangeToken(
           type: account.type,
           subtype: account.subtype ?? null,
           mask: account.mask ?? null,
+          currentBalance: account.balances.current ?? null,
+          balanceUpdatedAt: new Date(),
         },
       }),
     ),
@@ -269,6 +274,22 @@ export async function syncTransactions(userId: string, itemId: string, trigger: 
     await applyRules(userId);
   }
 
+  // Refresh account balances and the Cash Flow bills balance from them
+  try {
+    const balancesResponse = await plaidClient.accountsGet({ access_token: accessToken });
+    await Promise.all(
+      balancesResponse.data.accounts.map((account) =>
+        prisma.plaidAccount.updateMany({
+          where: { plaidAccountId: account.account_id },
+          data: { currentBalance: account.balances.current ?? null, balanceUpdatedAt: new Date() },
+        }),
+      ),
+    );
+    await refreshCashFlowBalanceFromPlaid(userId);
+  } catch (err) {
+    console.error(`Failed to refresh balances for item ${itemId}:`, err instanceof Error ? err.message : err);
+  }
+
   return { added: addedCount, modified: modifiedCount, removed: removedCount };
 }
 
@@ -374,6 +395,10 @@ export async function updateAccountSettings(
       where: { plaidAccountId: accountId },
       data: { isExcluded: !input.includeInSpending },
     });
+  }
+
+  if (input.includeInCashFlow !== undefined && input.includeInCashFlow !== account.includeInCashFlow) {
+    await refreshCashFlowBalanceFromPlaid(userId);
   }
 
   return updated;

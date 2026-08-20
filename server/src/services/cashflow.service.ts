@@ -137,6 +137,52 @@ export async function deleteOverride(userId: string, itemId: string, periodKey: 
   await prisma.cashFlowOverride.deleteMany({ where: { cashFlowItemId: itemId, periodKey } });
 }
 
+export async function markPaid(userId: string, itemId: string, occurrenceDate: string) {
+  const item = await prisma.cashFlowItem.findFirst({ where: { id: itemId, userId } });
+  if (!item) {
+    throw new NotFoundError("Cash flow item");
+  }
+  await prisma.cashFlowPayment.upsert({
+    where: { cashFlowItemId_occurrenceDate: { cashFlowItemId: itemId, occurrenceDate: parseUTCDateString(occurrenceDate) } },
+    create: { cashFlowItemId: itemId, occurrenceDate: parseUTCDateString(occurrenceDate) },
+    update: {},
+  });
+}
+
+export async function unmarkPaid(userId: string, itemId: string, occurrenceDate: string) {
+  const item = await prisma.cashFlowItem.findFirst({ where: { id: itemId, userId } });
+  if (!item) {
+    throw new NotFoundError("Cash flow item");
+  }
+  await prisma.cashFlowPayment.deleteMany({
+    where: { cashFlowItemId: itemId, occurrenceDate: parseUTCDateString(occurrenceDate) },
+  });
+}
+
+async function isBalanceAutoSynced(userId: string): Promise<boolean> {
+  const count = await prisma.plaidAccount.count({
+    where: { includeInCashFlow: true, currentBalance: { not: null }, plaidItem: { userId } },
+  });
+  return count > 0;
+}
+
+/**
+ * Sums currentBalance across the user's Cash Flow-linked Plaid accounts and writes it as the
+ * Bills Account Balance. A no-op when there are none, preserving manual entry as a fallback.
+ */
+export async function refreshCashFlowBalanceFromPlaid(userId: string) {
+  const accounts = await prisma.plaidAccount.findMany({
+    where: { includeInCashFlow: true, currentBalance: { not: null }, plaidItem: { userId } },
+  });
+  if (accounts.length === 0) return;
+
+  const total = accounts.reduce((sum, a) => sum + a.currentBalance!.toNumber(), 0);
+  await prisma.userSettings.update({
+    where: { userId },
+    data: { billsAccountBalance: total, billsAccountBalanceAsOf: utcMidnight(new Date()) },
+  });
+}
+
 export async function getBalance(userId: string) {
   const settings = await prisma.userSettings.findUnique({ where: { userId } });
   if (!settings) {
@@ -145,6 +191,7 @@ export async function getBalance(userId: string) {
   return {
     balance: settings.billsAccountBalance ? settings.billsAccountBalance.toString() : null,
     asOf: settings.billsAccountBalanceAsOf ? formatUTCDate(settings.billsAccountBalanceAsOf) : null,
+    isAutoSynced: await isBalanceAutoSynced(userId),
   };
 }
 
@@ -178,6 +225,7 @@ export async function getForecast(userId: string, horizonMonths?: number) {
       startingBalance: "0.00",
       asOf: null,
       isStale: false,
+      isAutoSynced: await isBalanceAutoSynced(userId),
       snapshots: [],
       alerts: [],
       timeline: [],
@@ -245,11 +293,22 @@ export async function getForecast(userId: string, horizonMonths?: number) {
 
   const staleDays = Math.floor((Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()) - asOfDate.getTime()) / 86400000);
 
+  const paidMarks = await prisma.cashFlowPayment.findMany({
+    where: { cashFlowItem: { userId } },
+    select: { cashFlowItemId: true, occurrenceDate: true },
+  });
+  const paidSet = new Set(paidMarks.map((m) => `${m.cashFlowItemId}|${formatUTCDate(m.occurrenceDate)}`));
+  const withPaidStatus = (ev: CashFlowEventResult) => ({
+    ...ev,
+    isPaid: ev.isReconciled || paidSet.has(`${ev.itemId}|${formatUTCDate(ev.date)}`),
+  });
+
   return {
     balanceConfigured: true,
     startingBalance: settings.billsAccountBalance.toString(),
     asOf: formatUTCDate(asOfDate),
     isStale: staleDays > STALE_BALANCE_DAYS,
+    isAutoSynced: await isBalanceAutoSynced(userId),
     snapshots: result.snapshots.map((s) => ({
       label: s.label,
       date: formatUTCDate(s.date),
@@ -261,7 +320,7 @@ export async function getForecast(userId: string, horizonMonths?: number) {
       endDate: a.endDate ? formatUTCDate(a.endDate) : null,
       lowestBalance: centsToDollars(a.lowestBalanceCents),
       lowestBalanceDate: formatUTCDate(a.lowestBalanceDate),
-      events: a.events.map(formatEvent),
+      events: a.events.map(withPaidStatus).map(formatEvent),
     })),
     timeline: result.timeline.map((m) => ({
       month: m.month,
@@ -270,7 +329,7 @@ export async function getForecast(userId: string, horizonMonths?: number) {
       net: centsToDollars(m.netCents),
       endingBalance: centsToDollars(m.endingBalanceCents),
     })),
-    events: result.events.map(formatEvent),
+    events: result.events.map(withPaidStatus).map(formatEvent),
     unexpectedTransactions,
   };
 }
@@ -358,6 +417,7 @@ async function buildReconciliation(
       isOverridden: false,
       isReconciled: false,
       isUnexpected: true,
+      isPaid: true, // already a real, completed transaction — just an unplanned one
     }),
   );
 
@@ -373,6 +433,7 @@ function formatEvent(ev: {
   isOverridden: boolean;
   isReconciled: boolean;
   isUnexpected: boolean;
+  isPaid: boolean;
   plannedCents?: number;
 }) {
   return {
@@ -384,6 +445,7 @@ function formatEvent(ev: {
     isOverridden: ev.isOverridden,
     isReconciled: ev.isReconciled,
     isUnexpected: ev.isUnexpected,
+    isPaid: ev.isPaid,
     ...(ev.plannedCents !== undefined ? { plannedAmount: centsToDollars(Math.abs(ev.plannedCents)) } : {}),
   };
 }

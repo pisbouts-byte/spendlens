@@ -104,10 +104,12 @@ model PlaidAccount {
   type              String // depository, credit, loan, etc.
   subtype           String?
   mask              String? // Last 4 digits
-  includeInCashFlow Boolean  @default(false)
-  includeInSpending Boolean  @default(true) // preserves pre-existing behavior
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  includeInCashFlow Boolean   @default(false)
+  includeInSpending Boolean   @default(true) // preserves pre-existing behavior
+  currentBalance    Decimal?  @db.Decimal(12, 2)
+  balanceUpdatedAt  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   plaidItem    PlaidItem     @relation(fields: [plaidItemId], references: [id], onDelete: Cascade)
   transactions Transaction[]
@@ -280,6 +282,7 @@ model CashFlowItem {
 
   user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   overrides CashFlowOverride[]
+  payments  CashFlowPayment[]
 
   @@index([userId, type, isActive])
 }
@@ -297,6 +300,17 @@ model CashFlowOverride {
   cashFlowItem CashFlowItem @relation(fields: [cashFlowItemId], references: [id], onDelete: Cascade)
 
   @@unique([cashFlowItemId, periodKey])
+}
+
+model CashFlowPayment {
+  id             String   @id @default(uuid())
+  cashFlowItemId String
+  occurrenceDate DateTime @db.Date // the specific occurrence being marked paid
+  createdAt      DateTime @default(now())
+
+  cashFlowItem CashFlowItem @relation(fields: [cashFlowItemId], references: [id], onDelete: Cascade)
+
+  @@unique([cashFlowItemId, occurrenceDate])
 }
 
 enum FiftyThirtyTwentyCategory {

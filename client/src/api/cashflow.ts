@@ -64,3 +64,11 @@ export async function getForecast(months?: number): Promise<CashFlowForecast> {
   });
   return data.data;
 }
+
+export async function markPaid(itemId: string, occurrenceDate: string): Promise<void> {
+  await client.post(`/cashflow/items/${itemId}/payments`, { occurrenceDate });
+}
+
+export async function unmarkPaid(itemId: string, occurrenceDate: string): Promise<void> {
+  await client.delete(`/cashflow/items/${itemId}/payments/${occurrenceDate}`);
+}

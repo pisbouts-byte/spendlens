@@ -5,6 +5,7 @@ import {
   UpsertCashFlowOverrideSchema,
   UpdateBillsBalanceSchema,
   ForecastQuerySchema,
+  MarkPaymentSchema,
 } from "@spendlens/shared";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -50,5 +51,13 @@ router.put(
 );
 
 router.delete("/items/:id/overrides/:periodKey", cashflowController.deleteOverride);
+
+router.post(
+  "/items/:id/payments",
+  validateRequest({ body: MarkPaymentSchema }),
+  cashflowController.markPaid,
+);
+
+router.delete("/items/:id/payments/:occurrenceDate", cashflowController.unmarkPaid);
 
 export default router;
