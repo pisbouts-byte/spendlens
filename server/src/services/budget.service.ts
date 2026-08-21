@@ -11,7 +11,7 @@ export async function getBudgets(userId: string) {
   return prisma.budget.findMany({
     where: { userId },
     include: { category: true },
-    orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ isPrimary: "desc" }, { isActive: "desc" }, { createdAt: "desc" }],
   });
 }
 
@@ -64,6 +64,21 @@ export async function updateBudget(
     throw new NotFoundError("Budget");
   }
 
+  // Only one budget can be primary at a time — demote any other before promoting this one.
+  if (input.isPrimary === true) {
+    return prisma.$transaction(async (tx) => {
+      await tx.budget.updateMany({
+        where: { userId, isPrimary: true, id: { not: budgetId } },
+        data: { isPrimary: false },
+      });
+      return tx.budget.update({
+        where: { id: budgetId },
+        data: input,
+        include: { category: true },
+      });
+    });
+  }
+
   return prisma.budget.update({
     where: { id: budgetId },
     data: input,
@@ -104,6 +119,7 @@ export async function getBudgetProgress(
   const budgets = await prisma.budget.findMany({
     where,
     include: { category: true },
+    orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
   });
 
   const results = await Promise.all(

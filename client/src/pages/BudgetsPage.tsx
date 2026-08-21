@@ -12,6 +12,7 @@ import {
   ChevronRight,
   CornerDownRight,
   RotateCcw,
+  Star,
 } from "lucide-react";
 import type {
   Budget,
@@ -219,6 +220,18 @@ export function BudgetsPage() {
     }
   }
 
+  async function handleTogglePrimary(budget: Budget) {
+    try {
+      await budgetsApi.updateBudget(budget.id, {
+        isPrimary: !budget.isPrimary,
+      });
+      await fetchData();
+      toast("success", budget.isPrimary ? "Removed as primary" : "Set as primary");
+    } catch {
+      toast("error", "Failed to update budget");
+    }
+  }
+
   async function handleCarryOver(budgetId: string, periodStart: string, overAmount: number) {
     if (
       !confirm(
@@ -292,94 +305,8 @@ export function BudgetsPage() {
         </Button>
       </div>
 
-      {/* Summary cards */}
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Wallet className="h-4 w-4" />
-            Total Budgeted
-          </div>
-          <p className="mt-1 text-2xl font-bold text-gray-900">
-            ${totalBudgeted.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <TrendingUp className="h-4 w-4" />
-            Total Spent
-          </div>
-          <p className="mt-1 text-2xl font-bold text-gray-900">
-            ${totalSpent.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <AlertTriangle className="h-4 w-4" />
-            Over Budget
-          </div>
-          <p
-            className={`mt-1 text-2xl font-bold ${overBudgetCount > 0 ? "text-red-600" : "text-green-600"}`}
-          >
-            {overBudgetCount}
-          </p>
-        </div>
-      </div>
-
-      {/* View toggle + period navigation */}
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleViewTypeChange("MONTHLY")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              viewType === "MONTHLY"
-                ? "bg-brand-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => handleViewTypeChange("WEEKLY")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              viewType === "WEEKLY"
-                ? "bg-brand-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            Weekly
-          </button>
-        </div>
-
-        <div className="flex items-center gap-1 ml-auto">
-          <button
-            onClick={() => setPeriodOffset((o) => o - 1)}
-            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="min-w-[160px] text-center text-sm font-medium text-gray-700">
-            {periodLabel}
-          </span>
-          <button
-            onClick={() => setPeriodOffset((o) => o + 1)}
-            disabled={periodOffset >= 0}
-            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-          {periodOffset !== 0 && (
-            <button
-              onClick={() => setPeriodOffset(0)}
-              className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
-            >
-              Current
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Budget progress list */}
-      <div className="mt-4 space-y-3">
+      <div className="mt-6 space-y-3">
         {progress.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
             <Wallet className="mx-auto h-12 w-12 text-gray-300" />
@@ -437,12 +364,31 @@ export function BudgetsPage() {
                       <span className="font-medium text-gray-900">
                         {item.budget.category?.name || "Overall Spending"}
                       </span>
+                      {item.budget.isPrimary && (
+                        <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                          <Star className="h-2.5 w-2.5 fill-amber-700" />
+                          Primary
+                        </span>
+                      )}
                       {!item.budget.isActive && (
                         <span className="ml-2 text-xs text-gray-400">(paused)</span>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() =>
+                        handleTogglePrimary(item.budget as unknown as Budget)
+                      }
+                      className={`rounded p-1.5 transition-colors hover:bg-gray-100 ${
+                        item.budget.isPrimary
+                          ? "text-amber-500 hover:text-amber-600"
+                          : "text-gray-400 hover:text-gray-600"
+                      }`}
+                      title={item.budget.isPrimary ? "Remove as primary" : "Set as primary"}
+                    >
+                      <Star className={`h-4 w-4 ${item.budget.isPrimary ? "fill-amber-500" : ""}`} />
+                    </button>
                     <button
                       onClick={() =>
                         handleToggleActive(item.budget as unknown as Budget)
@@ -583,6 +529,92 @@ export function BudgetsPage() {
             );
           })
         )}
+      </div>
+
+      {/* Summary cards */}
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Wallet className="h-4 w-4" />
+            Total Budgeted
+          </div>
+          <p className="mt-1 text-2xl font-bold text-gray-900">
+            ${totalBudgeted.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <TrendingUp className="h-4 w-4" />
+            Total Spent
+          </div>
+          <p className="mt-1 text-2xl font-bold text-gray-900">
+            ${totalSpent.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <AlertTriangle className="h-4 w-4" />
+            Over Budget
+          </div>
+          <p
+            className={`mt-1 text-2xl font-bold ${overBudgetCount > 0 ? "text-red-600" : "text-green-600"}`}
+          >
+            {overBudgetCount}
+          </p>
+        </div>
+      </div>
+
+      {/* View toggle + period navigation */}
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleViewTypeChange("MONTHLY")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewType === "MONTHLY"
+                ? "bg-brand-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => handleViewTypeChange("WEEKLY")}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewType === "WEEKLY"
+                ? "bg-brand-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Weekly
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1 ml-auto">
+          <button
+            onClick={() => setPeriodOffset((o) => o - 1)}
+            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="min-w-[160px] text-center text-sm font-medium text-gray-700">
+            {periodLabel}
+          </span>
+          <button
+            onClick={() => setPeriodOffset((o) => o + 1)}
+            disabled={periodOffset >= 0}
+            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          {periodOffset !== 0 && (
+            <button
+              onClick={() => setPeriodOffset(0)}
+              className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
+            >
+              Current
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Inactive budgets */}

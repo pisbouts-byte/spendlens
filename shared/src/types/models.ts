@@ -107,6 +107,7 @@ export interface Budget {
   type: BudgetType;
   amount: string;
   isActive: boolean;
+  isPrimary: boolean;
   createdAt: string;
   updatedAt: string;
   category?: Category | null;

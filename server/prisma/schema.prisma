@@ -198,6 +198,7 @@ model Budget {
   type       String // "WEEKLY" or "MONTHLY"
   amount     Decimal  @db.Decimal(12, 2)
   isActive   Boolean  @default(true)
+  isPrimary  Boolean  @default(false) // pinned to the top of the budgets list; at most one per user
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

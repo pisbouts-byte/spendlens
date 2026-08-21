@@ -10,6 +10,7 @@ export const CreateBudgetSchema = z.object({
 export const UpdateBudgetSchema = z.object({
   amount: z.number().positive().max(999999999999).optional(),
   isActive: z.boolean().optional(),
+  isPrimary: z.boolean().optional(),
 });
 
 export const BudgetProgressQuerySchema = z.object({
