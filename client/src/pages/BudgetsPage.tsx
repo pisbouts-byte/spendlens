@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Plus,
   Pencil,
@@ -91,6 +91,10 @@ export function BudgetsPage() {
 
   const { date: periodDate, label: periodLabel } = getOffsetDate(viewType, periodOffset);
 
+  // Only apply the primary budget's type as the initial default once per page visit —
+  // afterward, respect whatever view the user has manually switched to.
+  const hasAppliedPrimaryDefault = useRef(false);
+
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -102,6 +106,17 @@ export function BudgetsPage() {
         }),
         categoriesApi.getCategories(),
       ]);
+
+      if (!hasAppliedPrimaryDefault.current) {
+        hasAppliedPrimaryDefault.current = true;
+        const primary = budgetData.find((b) => b.isPrimary);
+        if (primary && primary.type !== viewType) {
+          setViewType(primary.type as "MONTHLY" | "WEEKLY");
+          setIsLoading(false);
+          return; // viewType change re-triggers fetchData with the right type/progress
+        }
+      }
+
       setBudgets(budgetData);
       setProgress(progressData);
       setCategories(categoryData);
@@ -134,6 +149,18 @@ export function BudgetsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // WKWebView's native scroll view can retain a stale content size when the DOM
+  // grows asynchronously after initial paint (e.g. this list rendering in after
+  // the fetch resolves), leaving the page unable to scroll to newly added content.
+  // Nudging a resize once loading settles forces it to recompute.
+  useEffect(() => {
+    if (isLoading) return;
+    const id = requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isLoading, progress.length, budgets.length]);
 
   function handleViewTypeChange(type: "MONTHLY" | "WEEKLY") {
     setViewType(type);
