@@ -11,6 +11,7 @@ struct BudgetWidgetItem: Codable {
     let spent: Double
     let type: String
     let periodLabel: String
+    let isPrimary: Bool
 }
 
 // MARK: - AppEntity for budget picker
@@ -79,6 +80,7 @@ private struct ApiBudget: Decodable {
     let id: String
     let type: String
     let amount: String
+    let isPrimary: Bool
     let category: ApiCategory?
 }
 
@@ -171,7 +173,8 @@ struct BudgetProvider: AppIntentTimelineProvider {
                     budgeted: Double(p.budget.amount) ?? 0,
                     spent: Double(p.spent) ?? 0,
                     type: p.budget.type,
-                    periodLabel: periodLabel(from: p.periodStart, type: p.budget.type)
+                    periodLabel: periodLabel(from: p.periodStart, type: p.budget.type),
+                    isPrimary: p.budget.isPrimary
                 )
             }
 
@@ -195,11 +198,13 @@ struct BudgetProvider: AppIntentTimelineProvider {
     private func loadEntry(for configuration: SelectBudgetIntent) -> BudgetEntry {
         let defaults = UserDefaults(suiteName: suiteName)
         let selectedId = configuration.budget?.id
+        let cachedItems: [BudgetWidgetItem]? = {
+            guard let data = defaults?.data(forKey: "bw_budgets") else { return nil }
+            return try? JSONDecoder().decode([BudgetWidgetItem].self, from: data)
+        }()
 
         if let selectedId, selectedId != "__all__",
-           let data = defaults?.data(forKey: "bw_budgets"),
-           let items = try? JSONDecoder().decode([BudgetWidgetItem].self, from: data),
-           let item = items.first(where: { $0.id == selectedId }) {
+           let item = cachedItems?.first(where: { $0.id == selectedId }) {
             return BudgetEntry(
                 date: Date(),
                 totalBudgeted: item.budgeted,
@@ -207,6 +212,19 @@ struct BudgetProvider: AppIntentTimelineProvider {
                 periodLabel:   item.periodLabel,
                 type:          item.type,
                 budgetName:    item.name
+            )
+        }
+
+        // No selection has been made yet (widget just added, unconfigured) —
+        // default to the user's primary budget instead of the all-budgets total.
+        if selectedId == nil, let primary = cachedItems?.first(where: { $0.isPrimary }) {
+            return BudgetEntry(
+                date: Date(),
+                totalBudgeted: primary.budgeted,
+                totalSpent:    primary.spent,
+                periodLabel:   primary.periodLabel,
+                type:          primary.type,
+                budgetName:    primary.name
             )
         }
 

@@ -137,6 +137,7 @@ export function BudgetsPage() {
           spent: parseFloat(p.spent),
           type: viewType,
           periodLabel: currentPeriodLabel,
+          isPrimary: p.budget.isPrimary,
         })),
       }).catch(() => {}); // no-op on web/Android
     } catch {

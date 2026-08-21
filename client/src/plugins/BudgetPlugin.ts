@@ -7,6 +7,7 @@ export interface BudgetItem {
   spent: number;
   type: "MONTHLY" | "WEEKLY";
   periodLabel: string;
+  isPrimary: boolean;
 }
 
 export interface BudgetPluginInterface {
