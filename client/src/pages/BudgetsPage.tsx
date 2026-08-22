@@ -121,24 +121,57 @@ export function BudgetsPage() {
       setProgress(progressData);
       setCategories(categoryData);
 
-      // Push totals + individual budgets to the iOS widget via App Group
+      // Push totals + individual budgets (both Monthly and Weekly, for their
+      // current periods) to the iOS widget via App Group, independent of
+      // whichever period/type is currently being browsed on-screen.
       const totalBudgeted = progressData.reduce((s, p) => s + parseFloat(p.budget.amount), 0);
       const totalSpent = progressData.reduce((s, p) => s + parseFloat(p.spent), 0);
       const currentPeriodLabel = getOffsetDate(viewType, periodOffset).label;
+
+      const monthlyCurrent = getOffsetDate("MONTHLY", 0);
+      const weeklyCurrent = getOffsetDate("WEEKLY", 0);
+      const [monthlyProgress, weeklyProgress] = await Promise.all([
+        viewType === "MONTHLY" && periodOffset === 0
+          ? Promise.resolve(progressData)
+          : budgetsApi.getBudgetProgress({
+              type: "MONTHLY",
+              date: monthlyCurrent.date.toISOString().split("T")[0],
+            }),
+        viewType === "WEEKLY" && periodOffset === 0
+          ? Promise.resolve(progressData)
+          : budgetsApi.getBudgetProgress({
+              type: "WEEKLY",
+              date: weeklyCurrent.date.toISOString().split("T")[0],
+            }),
+      ]);
+
+      const widgetBudgets = [
+        ...monthlyProgress.map((p) => ({
+          id: p.budget.id,
+          name: p.budget.category?.name ?? "Overall Spending",
+          budgeted: parseFloat(p.budget.amount),
+          spent: parseFloat(p.spent),
+          type: "MONTHLY" as const,
+          periodLabel: monthlyCurrent.label,
+          isPrimary: p.budget.isPrimary,
+        })),
+        ...weeklyProgress.map((p) => ({
+          id: p.budget.id,
+          name: p.budget.category?.name ?? "Overall Spending",
+          budgeted: parseFloat(p.budget.amount),
+          spent: parseFloat(p.spent),
+          type: "WEEKLY" as const,
+          periodLabel: weeklyCurrent.label,
+          isPrimary: p.budget.isPrimary,
+        })),
+      ];
+
       BudgetPlugin.updateWidgetData({
         type: viewType,
         totalBudgeted,
         totalSpent,
         periodLabel: currentPeriodLabel,
-        budgets: progressData.map((p) => ({
-          id: p.budget.id,
-          name: p.budget.category?.name ?? "Overall Spending",
-          budgeted: parseFloat(p.budget.amount),
-          spent: parseFloat(p.spent),
-          type: viewType,
-          periodLabel: currentPeriodLabel,
-          isPrimary: p.budget.isPrimary,
-        })),
+        budgets: widgetBudgets,
       }).catch(() => {}); // no-op on web/Android
     } catch {
       toast("error", "Failed to load budgets");

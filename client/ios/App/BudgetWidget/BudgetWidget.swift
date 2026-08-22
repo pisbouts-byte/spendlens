@@ -154,19 +154,17 @@ struct BudgetProvider: AppIntentTimelineProvider {
         df.dateFormat = "yyyy-MM-dd"
         let today = df.string(from: Date())
 
-        guard let url = URL(string: "\(apiUrl)/budgets/progress?type=\(budgetType)&date=\(today)"),
-              url.scheme == "http" || url.scheme == "https" else { return }
-
-        var request = URLRequest(url: url, timeoutInterval: 10)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
-
-            let result = try JSONDecoder().decode(ApiResponse<[ApiProgress]>.self, from: data)
-
-            let items = result.data.map { p in
+        func fetchItems(type: String) async -> [BudgetWidgetItem] {
+            guard let url = URL(string: "\(apiUrl)/budgets/progress?type=\(type)&date=\(today)"),
+                  url.scheme == "http" || url.scheme == "https" else { return [] }
+            var request = URLRequest(url: url, timeoutInterval: 10)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  let result = try? JSONDecoder().decode(ApiResponse<[ApiProgress]>.self, from: data) else {
+                return []
+            }
+            return result.data.map { p in
                 BudgetWidgetItem(
                     id: p.budget.id,
                     name: p.budget.category?.name ?? "Overall Spending",
@@ -177,22 +175,28 @@ struct BudgetProvider: AppIntentTimelineProvider {
                     isPrimary: p.budget.isPrimary
                 )
             }
-
-            let totalBudgeted = items.reduce(0.0) { $0 + $1.budgeted }
-            let totalSpent    = items.reduce(0.0) { $0 + $1.spent }
-            let label         = items.first?.periodLabel ?? "—"
-
-            if let encoded = try? JSONEncoder().encode(items) {
-                defaults?.set(encoded, forKey: "bw_budgets")
-            }
-            defaults?.set(totalBudgeted, forKey: "bw_totalBudgeted")
-            defaults?.set(totalSpent,    forKey: "bw_totalSpent")
-            defaults?.set(label,         forKey: "bw_periodLabel")
-            defaults?.set(budgetType,    forKey: "bw_type")
-            defaults?.synchronize()
-        } catch {
-            // Network or parse failure — stale cache will be used
         }
+
+        // Fetch both types so the config picker always offers Monthly and
+        // Weekly budgets, regardless of which type this widget instance shows.
+        async let monthlyItems = fetchItems(type: "MONTHLY")
+        async let weeklyItems = fetchItems(type: "WEEKLY")
+        let allItems = await monthlyItems + weeklyItems
+        guard !allItems.isEmpty else { return }
+
+        let items = allItems.filter { $0.type == budgetType }
+        let totalBudgeted = items.reduce(0.0) { $0 + $1.budgeted }
+        let totalSpent    = items.reduce(0.0) { $0 + $1.spent }
+        let label         = items.first?.periodLabel ?? "—"
+
+        if let encoded = try? JSONEncoder().encode(allItems) {
+            defaults?.set(encoded, forKey: "bw_budgets")
+        }
+        defaults?.set(totalBudgeted, forKey: "bw_totalBudgeted")
+        defaults?.set(totalSpent,    forKey: "bw_totalSpent")
+        defaults?.set(label,         forKey: "bw_periodLabel")
+        defaults?.set(budgetType,    forKey: "bw_type")
+        defaults?.synchronize()
     }
 
     private func loadEntry(for configuration: SelectBudgetIntent) -> BudgetEntry {
