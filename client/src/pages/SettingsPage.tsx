@@ -27,6 +27,13 @@ const CURRENCY_OPTIONS = [
   { value: "JPY", label: "JPY (\u00a5)" },
 ];
 
+const PAY_PERIOD_OPTIONS = [
+  { value: "", label: "Not set" },
+  { value: "7", label: "Weekly (7 days)" },
+  { value: "14", label: "Biweekly (14 days)" },
+  { value: "30", label: "Monthly (30 days)" },
+];
+
 export function SettingsPage() {
   const { toast } = useToast();
   const { logout } = useAuth();
@@ -40,6 +47,8 @@ export function SettingsPage() {
   const [weekStartDay, setWeekStartDay] = useState("1");
   const [currency, setCurrency] = useState("USD");
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+  const [payPeriodLengthDays, setPayPeriodLengthDays] = useState("");
+  const [payPeriodAnchorDate, setPayPeriodAnchorDate] = useState("");
 
   useEffect(() => {
     settingsApi
@@ -49,6 +58,8 @@ export function SettingsPage() {
         setWeekStartDay(String(s.weekStartDay));
         setCurrency(s.currency);
         setAutoSyncEnabled(s.autoSyncEnabled ?? true);
+        setPayPeriodLengthDays(s.payPeriodLengthDays ? String(s.payPeriodLengthDays) : "");
+        setPayPeriodAnchorDate(s.payPeriodAnchorDate ?? "");
       })
       .catch(() => toast("error", "Failed to load settings"))
       .finally(() => setLoading(false));
@@ -57,11 +68,22 @@ export function SettingsPage() {
   async function handleSave() {
     if (!settings) return;
 
-    const updates: { weekStartDay?: number; currency?: string; autoSyncEnabled?: boolean } = {};
+    const updates: {
+      weekStartDay?: number;
+      currency?: string;
+      autoSyncEnabled?: boolean;
+      payPeriodLengthDays?: 7 | 14 | 30 | null;
+      payPeriodAnchorDate?: string | null;
+    } = {};
     const newDay = parseInt(weekStartDay, 10);
     if (newDay !== settings.weekStartDay) updates.weekStartDay = newDay;
     if (currency !== settings.currency) updates.currency = currency;
     if (autoSyncEnabled !== (settings.autoSyncEnabled ?? true)) updates.autoSyncEnabled = autoSyncEnabled;
+
+    const newLength = payPeriodLengthDays ? (parseInt(payPeriodLengthDays, 10) as 7 | 14 | 30) : null;
+    if (newLength !== settings.payPeriodLengthDays) updates.payPeriodLengthDays = newLength;
+    const newAnchor = payPeriodAnchorDate || null;
+    if (newAnchor !== settings.payPeriodAnchorDate) updates.payPeriodAnchorDate = newAnchor;
 
     if (Object.keys(updates).length === 0) {
       toast("info", "No changes to save");
@@ -125,6 +147,34 @@ export function SettingsPage() {
               <span className={"inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform " + (autoSyncEnabled ? "translate-x-6" : "translate-x-1")} />
             </button>
           </div>
+          <div>
+            <Select
+              label="Pay period"
+              value={payPeriodLengthDays}
+              onChange={(e) => setPayPeriodLengthDays(e.target.value)}
+              options={PAY_PERIOD_OPTIONS}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Used by the Bills Grid on desktop to lay out your billers by pay period.
+            </p>
+          </div>
+          {payPeriodLengthDays && (
+            <div>
+              <label htmlFor="pay-period-anchor" className="mb-1 block text-sm font-medium text-gray-700">
+                A recent payday
+              </label>
+              <input
+                id="pay-period-anchor"
+                type="date"
+                value={payPeriodAnchorDate}
+                onChange={(e) => setPayPeriodAnchorDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Any date that started one of your pay periods — used to line up the grid's columns.
+              </p>
+            </div>
+          )}
           <div className="pt-2">
             <Button onClick={handleSave} isLoading={saving}>
               Save Changes

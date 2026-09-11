@@ -20,6 +20,8 @@ export interface UserSettings {
   userId: string;
   weekStartDay: number;
   currency: string;
+  payPeriodLengthDays: number | null;
+  payPeriodAnchorDate: string | null;
   createdAt: string;
   updatedAt: string;
 }

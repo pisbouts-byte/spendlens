@@ -37,11 +37,13 @@ import type {
 } from "@spendlens/shared";
 import { CashFlowType, CashFlowFrequency } from "@spendlens/shared";
 import * as cashflowApi from "../api/cashflow.ts";
+import * as settingsApi from "../api/settings.ts";
 import { monthlyEquivalentTotal } from "../lib/monthlyEquivalent.ts";
 import { Button } from "../components/ui/Button.tsx";
 import { Modal } from "../components/ui/Modal.tsx";
 import { Spinner } from "../components/ui/Spinner.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
+import { BillsGrid } from "../components/cashflow/BillsGrid.tsx";
 
 const FREQUENCY_LABELS: Record<CashFlowFrequency, string> = {
   [CashFlowFrequency.ONE_TIME]: "One-time",
@@ -140,6 +142,9 @@ export function CashFlowPage() {
   const [incomeItems, setIncomeItems] = useState<CashFlowItem[]>([]);
   const [billItems, setBillItems] = useState<CashFlowItem[]>([]);
   const [balance, setBalance] = useState<CashFlowBalance | null>(null);
+  const [payPeriodLengthDays, setPayPeriodLengthDays] = useState<number | null>(null);
+  const [payPeriodAnchorDate, setPayPeriodAnchorDate] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
 
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceAsOf, setBalanceAsOf] = useState(todayDateString());
@@ -166,10 +171,11 @@ export function CashFlowPage() {
     // like the "This Month" selector.
     if (!hasLoadedRef.current) setIsLoading(true);
     try {
-      const [f, items, bal] = await Promise.all([
+      const [f, items, bal, settings] = await Promise.all([
         cashflowApi.getForecast(),
         cashflowApi.getItems(),
         cashflowApi.getBalance(),
+        settingsApi.getSettings(),
       ]);
       setForecast(f);
       setLoadedMonths(DEFAULT_LOADED_MONTHS);
@@ -178,6 +184,8 @@ export function CashFlowPage() {
       setBalance(bal);
       setBalanceAmount(bal.balance ?? "");
       setBalanceAsOf(bal.asOf ?? todayDateString());
+      setPayPeriodLengthDays(settings.payPeriodLengthDays);
+      setPayPeriodAnchorDate(settings.payPeriodAnchorDate);
     } catch {
       toast("error", "Failed to load cash flow data");
     } finally {
@@ -345,7 +353,42 @@ export function CashFlowPage() {
       </div>
 
       {forecast?.balanceConfigured && (
-        <MonthlyStatusSection forecast={forecast} onChanged={fetchData} />
+        <div className="mt-4">
+          <div className="mb-3 hidden items-center justify-end lg:flex">
+            <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                List
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  viewMode === "grid" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Grid
+              </button>
+            </div>
+          </div>
+
+          <div className={viewMode === "grid" ? "lg:hidden" : ""}>
+            <MonthlyStatusSection forecast={forecast} onChanged={fetchData} />
+          </div>
+          {viewMode === "grid" && (
+            <div className="hidden lg:block">
+              <BillsGrid
+                forecast={forecast}
+                payPeriodLengthDays={payPeriodLengthDays}
+                payPeriodAnchorDate={payPeriodAnchorDate}
+                onChanged={fetchData}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {!forecast?.balanceConfigured ? (

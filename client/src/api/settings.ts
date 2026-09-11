@@ -7,6 +7,8 @@ export interface UserSettings {
   weekStartDay: number;
   currency: string;
   autoSyncEnabled: boolean;
+  payPeriodLengthDays: number | null;
+  payPeriodAnchorDate: string | null;
   createdAt: string;
   updatedAt: string;
 }

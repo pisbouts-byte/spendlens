@@ -50,6 +50,8 @@ model UserSettings {
   autoSyncEnabled         Boolean   @default(true)
   billsAccountBalance     Decimal?  @db.Decimal(12, 2)
   billsAccountBalanceAsOf DateTime? @db.Date
+  payPeriodLengthDays     Int? // 7, 14, or 30 — column length for the Bills Grid; null = not configured
+  payPeriodAnchorDate     DateTime? @db.Date // a known period-start date; aligns the grid, not necessarily the first visible column
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
