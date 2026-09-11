@@ -355,17 +355,18 @@ async function buildReconciliation(
     where: { includeInCashFlow: true, plaidItem: { userId } },
     select: { id: true },
   });
-  if (mappedAccounts.length === 0) return empty;
 
   const windowEnd = utcMidnight(today);
   if (windowEnd.getTime() <= asOfDate.getTime()) return empty;
 
+  // Manual (isManual: true) transactions are always considered here — a
+  // user-logged ad-hoc charge shouldn't require a linked Plaid account.
   const transactions = await prisma.transaction.findMany({
     where: {
       userId,
-      plaidAccountId: { in: mappedAccounts.map((a) => a.id) },
       isPending: false,
       date: { gt: asOfDate, lte: windowEnd },
+      OR: [{ plaidAccountId: { in: mappedAccounts.map((a) => a.id) } }, { isManual: true }],
     },
   });
   if (transactions.length === 0) return empty;
@@ -418,6 +419,7 @@ async function buildReconciliation(
       isReconciled: false,
       isUnexpected: true,
       isPaid: true, // already a real, completed transaction — just an unplanned one
+      note: t.notes,
     }),
   );
 
@@ -435,6 +437,7 @@ function formatEvent(ev: {
   isUnexpected: boolean;
   isPaid: boolean;
   plannedCents?: number;
+  note?: string | null;
 }) {
   return {
     date: formatUTCDate(ev.date),
@@ -446,6 +449,7 @@ function formatEvent(ev: {
     isReconciled: ev.isReconciled,
     isUnexpected: ev.isUnexpected,
     isPaid: ev.isPaid,
+    note: ev.note ?? null,
     ...(ev.plannedCents !== undefined ? { plannedAmount: centsToDollars(Math.abs(ev.plannedCents)) } : {}),
   };
 }

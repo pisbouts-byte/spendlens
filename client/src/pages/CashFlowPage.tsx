@@ -44,6 +44,7 @@ import { Modal } from "../components/ui/Modal.tsx";
 import { Spinner } from "../components/ui/Spinner.tsx";
 import { useToast } from "../components/ui/Toast.tsx";
 import { BillsGrid } from "../components/cashflow/BillsGrid.tsx";
+import { OverrideModal } from "../components/cashflow/OverrideModal.tsx";
 
 const FREQUENCY_LABELS: Record<CashFlowFrequency, string> = {
   [CashFlowFrequency.ONE_TIME]: "One-time",
@@ -382,6 +383,7 @@ export function CashFlowPage() {
             <div className="hidden lg:block">
               <BillsGrid
                 forecast={forecast}
+                items={billItems}
                 payPeriodLengthDays={payPeriodLengthDays}
                 payPeriodAnchorDate={payPeriodAnchorDate}
                 onChanged={fetchData}
@@ -1108,120 +1110,6 @@ function ItemFormModal({ type, editingItem, onClose, onSaved }: ItemFormModalPro
   );
 }
 
-interface OverrideModalProps {
-  item: CashFlowItem;
-  onClose: () => void;
-  onSaved: () => void | Promise<void>;
-}
-
-function OverrideModal({ item, onClose, onSaved }: OverrideModalProps) {
-  const { toast } = useToast();
-  const isMonthly = ![CashFlowFrequency.WEEKLY, CashFlowFrequency.BIWEEKLY].includes(item.frequency);
-  const defaultPeriodKey = isMonthly ? todayDateString().slice(0, 7) : todayDateString();
-  const [periodKey, setPeriodKey] = useState(defaultPeriodKey);
-  const [amount, setAmount] = useState("");
-  const [isSkipped, setIsSkipped] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const existing = item.overrides?.find((o) => o.periodKey === periodKey);
-
-  useEffect(() => {
-    setAmount(existing?.amount ?? "");
-    setIsSkipped(existing?.isSkipped ?? false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodKey]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      await cashflowApi.upsertOverride(item.id, {
-        periodKey,
-        amount: !isSkipped && amount ? parseFloat(amount) : null,
-        isSkipped,
-      });
-      toast("success", "Override saved");
-      await onSaved();
-    } catch (err) {
-      toast("error", errorMessage(err, "Failed to save override"));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleRemove() {
-    setIsSubmitting(true);
-    try {
-      await cashflowApi.deleteOverride(item.id, periodKey);
-      toast("success", "Override removed");
-      await onSaved();
-    } catch {
-      toast("error", "Failed to remove override");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal isOpen onClose={onClose} title={`Override — ${item.name}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            {isMonthly ? "Month" : "Occurrence date"}
-          </label>
-          <input
-            type={isMonthly ? "month" : "date"}
-            value={periodKey}
-            onChange={(e) => setPeriodKey(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-            required
-          />
-          <p className="mt-1 text-xs text-gray-400">
-            Base amount for this item is {formatCurrency(item.amount)}
-          </p>
-        </div>
-        <div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={isSkipped} onChange={(e) => setIsSkipped(e.target.checked)} />
-            Skip this occurrence entirely
-          </label>
-        </div>
-        {!isSkipped && (
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Override amount ($)</label>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-          </div>
-        )}
-        <div className="flex items-center justify-between gap-2 pt-2">
-          {existing ? (
-            <Button type="button" variant="ghost" onClick={handleRemove} disabled={isSubmitting}>
-              <X className="mr-1 h-4 w-4" />
-              Remove override
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={isSubmitting}>
-              Save
-            </Button>
-          </div>
-        </div>
-      </form>
-    </Modal>
-  );
-}
 
 interface MonthDrilldownModalProps {
   monthKey: string;

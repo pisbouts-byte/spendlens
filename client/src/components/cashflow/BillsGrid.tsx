@@ -1,9 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Link2 } from "lucide-react";
-import type { CashFlowEvent, CashFlowForecast } from "@spendlens/shared";
+import { Link2, Pencil, Plus } from "lucide-react";
+import type { CashFlowEvent, CashFlowForecast, CashFlowItem } from "@spendlens/shared";
 import * as cashflowApi from "../../api/cashflow.ts";
+import * as transactionsApi from "../../api/transactions.ts";
 import { useToast } from "../ui/Toast.tsx";
+import { Button } from "../ui/Button.tsx";
+import { Modal } from "../ui/Modal.tsx";
+import { OverrideModal } from "./OverrideModal.tsx";
 
 const PERIOD_COUNT = 10;
 const DAY_MS = 86400000;
@@ -12,6 +16,7 @@ const PERIOD_COL = "116px";
 
 interface BillsGridProps {
   forecast: CashFlowForecast;
+  items: CashFlowItem[];
   payPeriodLengthDays: number | null;
   payPeriodAnchorDate: string | null;
   onChanged: () => void | Promise<void>;
@@ -82,9 +87,13 @@ function gridTemplate(periodCount: number): string {
   return `${LABEL_COL} repeat(${periodCount}, ${PERIOD_COL})`;
 }
 
-export function BillsGrid({ forecast, payPeriodLengthDays, payPeriodAnchorDate, onChanged }: BillsGridProps) {
+export function BillsGrid({ forecast, items, payPeriodLengthDays, payPeriodAnchorDate, onChanged }: BillsGridProps) {
   const { toast } = useToast();
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  const [overrideTarget, setOverrideTarget] = useState<{ item: CashFlowItem; date: string } | null>(null);
+  const [showAddCharge, setShowAddCharge] = useState(false);
+
+  const itemsById = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
 
   const periods = useMemo(() => {
     if (!payPeriodLengthDays || !payPeriodAnchorDate) return [];
@@ -257,7 +266,16 @@ export function BillsGrid({ forecast, payPeriodLengthDays, payPeriodAnchorDate, 
               >
                 <div className={`sticky left-0 truncate px-4 py-2 text-sm text-gray-800 ${rowBg}`}>{row.name}</div>
                 {row.cells.map((cell, j) => (
-                  <GridCell key={j} event={cell} togglingKey={togglingKey} onToggle={handleToggle} />
+                  <GridCell
+                    key={j}
+                    event={cell}
+                    togglingKey={togglingKey}
+                    onToggle={handleToggle}
+                    onEdit={(ev) => {
+                      const item = itemsById.get(ev.cashFlowItemId);
+                      if (item) setOverrideTarget({ item, date: ev.date });
+                    }}
+                  />
                 ))}
               </div>
             );
@@ -265,7 +283,19 @@ export function BillsGrid({ forecast, payPeriodLengthDays, payPeriodAnchorDate, 
 
           {unplannedRows.map((row, i) => (
             <div key={`unplanned-${i}`} className="grid border-b border-gray-100" style={{ gridTemplateColumns: gridTemplate(periods.length) }}>
-              <div className="sticky left-0 bg-white px-4 py-2 text-sm font-medium text-amber-700">{row.label}</div>
+              <div className="sticky left-0 flex items-center gap-1.5 bg-white px-4 py-2 text-sm font-medium text-amber-700">
+                {row.label}
+                {i === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCharge(true)}
+                    title="Add unplanned charge"
+                    className="rounded p-0.5 text-amber-500 transition-colors hover:bg-amber-100 hover:text-amber-700"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               {row.cells.map((cell, j) => (
                 <UnplannedGridCell key={j} cell={cell} />
               ))}
@@ -312,6 +342,28 @@ export function BillsGrid({ forecast, payPeriodLengthDays, payPeriodAnchorDate, 
           </div>
         </div>
       </div>
+
+      {overrideTarget && (
+        <OverrideModal
+          item={overrideTarget.item}
+          initialDate={overrideTarget.date}
+          onClose={() => setOverrideTarget(null)}
+          onSaved={async () => {
+            setOverrideTarget(null);
+            await onChanged();
+          }}
+        />
+      )}
+
+      {showAddCharge && (
+        <AddUnplannedChargeModal
+          onClose={() => setShowAddCharge(false)}
+          onSaved={async () => {
+            setShowAddCharge(false);
+            await onChanged();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -320,10 +372,12 @@ function GridCell({
   event,
   togglingKey,
   onToggle,
+  onEdit,
 }: {
   event: CashFlowEvent | undefined;
   togglingKey: string | null;
   onToggle: (event: CashFlowEvent) => void;
+  onEdit: (event: CashFlowEvent) => void;
 }) {
   if (!event) return <div className="border-l border-gray-100" />;
 
@@ -340,28 +394,48 @@ function GridCell({
     );
   }
 
+  const editButton = (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onEdit(event);
+      }}
+      title="Edit amount"
+      className="absolute left-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-200 hover:text-gray-700 group-hover:opacity-100"
+    >
+      <Pencil className="h-3 w-3" />
+    </button>
+  );
+
   if (event.isPaid) {
     return (
-      <button
-        onClick={() => onToggle(event)}
-        disabled={isToggling}
-        title="Mark as unpaid"
-        className="w-full border-l border-gray-100 bg-green-50 px-2 py-2 text-right text-sm text-green-700 transition-colors hover:bg-green-100 disabled:opacity-60"
-      >
-        <span className="line-through decoration-green-300">{amount}</span>
-      </button>
+      <div className="group relative border-l border-gray-100 bg-green-50">
+        {editButton}
+        <button
+          onClick={() => onToggle(event)}
+          disabled={isToggling}
+          title="Mark as unpaid"
+          className="w-full px-2 py-2 text-right text-sm text-green-700 transition-colors hover:bg-green-100 disabled:opacity-60"
+        >
+          <span className="line-through decoration-green-300">{amount}</span>
+        </button>
+      </div>
     );
   }
 
   return (
-    <button
-      onClick={() => onToggle(event)}
-      disabled={isToggling}
-      title="Mark as paid"
-      className="w-full border-l border-gray-100 px-2 py-2 text-right text-sm text-gray-900 transition-colors hover:bg-blue-50 disabled:opacity-60"
-    >
-      {amount}
-    </button>
+    <div className="group relative border-l border-gray-100">
+      {editButton}
+      <button
+        onClick={() => onToggle(event)}
+        disabled={isToggling}
+        title="Mark as paid"
+        className="w-full px-2 py-2 text-right text-sm text-gray-900 transition-colors hover:bg-blue-50 disabled:opacity-60"
+      >
+        {amount}
+      </button>
+    </div>
   );
 }
 
@@ -374,12 +448,109 @@ function UnplannedGridCell({ cell }: { cell: UnplannedCell | undefined }) {
       {cell.items.length > 1 && <span className="ml-0.5 text-[9px] font-bold text-amber-600">×{cell.items.length}</span>}
       <div className="pointer-events-none absolute right-0 top-full z-10 mt-1 hidden min-w-max rounded-lg bg-gray-900 px-2.5 py-2 text-left text-xs text-white shadow-lg group-hover:block">
         {cell.items.map((it, i) => (
-          <div key={i} className="flex items-center justify-between gap-3 py-0.5">
-            <span>{it.name}</span>
-            <span className="font-semibold">{formatCurrency(parseFloat(it.amount))}</span>
+          <div key={i} className="py-0.5">
+            <div className="flex items-center justify-between gap-3">
+              <span>{it.name}</span>
+              <span className="font-semibold">{formatCurrency(parseFloat(it.amount))}</span>
+            </div>
+            {it.note && <div className="max-w-[220px] text-[11px] text-gray-300">{it.note}</div>}
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function AddUnplannedChargeModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const amountNum = parseFloat(amount);
+    if (!name.trim() || !Number.isFinite(amountNum) || amountNum <= 0) return;
+    setIsSubmitting(true);
+    try {
+      await transactionsApi.createTransaction({
+        name: name.trim(),
+        amount: amountNum,
+        date,
+        notes: note.trim() || null,
+        categoryId: null,
+      });
+      toast("success", "Charge added");
+      await onSaved();
+    } catch {
+      toast("error", "Failed to add charge");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} title="Add unplanned charge">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Amount</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Note (optional)</label>
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="What was this for?"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            Add charge
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

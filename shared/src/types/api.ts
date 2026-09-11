@@ -76,6 +76,7 @@ export interface CashFlowEvent {
   isReconciled: boolean;
   isUnexpected: boolean;
   isPaid: boolean;
+  note: string | null;
   plannedAmount?: string;
 }
 
