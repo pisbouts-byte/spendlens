@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">BudgetWisely</string>
-    <string name="title_activity_main">BudgetWisely</string>
+    <string name="app_name">Budget Wisely</string>
+    <string name="title_activity_main">Budget Wisely</string>
     <string name="package_name">com.spendlens.app</string>
     <string name="custom_url_scheme">com.spendlens.app</string>
     <string name="widget_description">Shows your current budget vs spending</string>
