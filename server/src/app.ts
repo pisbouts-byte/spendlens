@@ -14,6 +14,7 @@ const allowedOrigins = [
   // Capacitor native shells
   "capacitor://localhost",
   "http://localhost",
+  "https://localhost",  // Android Capacitor WebView origin
 ];
 app.use(
   cors({
