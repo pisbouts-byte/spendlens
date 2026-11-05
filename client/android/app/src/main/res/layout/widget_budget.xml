@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/widget_background">
+
+    <TextView
+        android:id="@+id/widget_period"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Budget Wisely"
+        android:textColor="#ffffffcc"
+        android:textSize="11sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_spent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="$0 spent"
+            android:textColor="#ffffff"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_budgeted"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="of $0"
+            android:textColor="#ffffffcc"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/widget_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="5dp"
+        android:max="100"
+        android:progress="0"
+        android:progressTint="#ffffff"
+        android:progressBackgroundTint="#4dffffff" />
+
+    <TextView
+        android:id="@+id/widget_remaining"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="$0 remaining"
+        android:textColor="#ffffff"
+        android:textSize="11sp"
+        android:layout_marginTop="5dp" />
+
+</LinearLayout>
