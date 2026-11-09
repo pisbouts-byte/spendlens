@@ -9,7 +9,7 @@ import { Button } from "../ui/Button.tsx";
 import { Modal } from "../ui/Modal.tsx";
 import { OverrideModal } from "./OverrideModal.tsx";
 
-const PERIOD_COUNT = 10;
+
 const DAY_MS = 86400000;
 const LABEL_COL = "200px";
 const PERIOD_COL = "116px";
@@ -66,7 +66,11 @@ function buildPeriods(anchorDate: string, lengthDays: number): Period[] {
   const currentIndex = Math.floor((todayMs - anchorMs) / lengthMs);
 
   const periods: Period[] = [];
-  for (let i = 0; i < PERIOD_COUNT; i++) {
+  const endOfRangeMs = Date.UTC(2028, 11, 31);
+  const lastIndex = Math.ceil((endOfRangeMs - anchorMs) / lengthMs);
+  const periodCount = Math.max(10, lastIndex - currentIndex + 1);
+
+  for (let i = 0; i < periodCount; i++) {
     const index = currentIndex + i;
     const startMs = anchorMs + index * lengthMs;
     const endMs = startMs + lengthMs - DAY_MS;

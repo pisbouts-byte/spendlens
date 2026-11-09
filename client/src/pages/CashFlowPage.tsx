@@ -72,7 +72,7 @@ const DURATION_LABELS: Record<ChartDuration, string> = {
   custom: "Custom",
 };
 
-const DEFAULT_LOADED_MONTHS = 12;
+const DEFAULT_LOADED_MONTHS = 26;
 
 function currentMonthKey(): string {
   const d = new Date();
@@ -173,7 +173,7 @@ export function CashFlowPage() {
     if (!hasLoadedRef.current) setIsLoading(true);
     try {
       const [f, items, bal, settings] = await Promise.all([
-        cashflowApi.getForecast(),
+        cashflowApi.getForecast(DEFAULT_LOADED_MONTHS),
         cashflowApi.getItems(),
         cashflowApi.getBalance(),
         settingsApi.getSettings(),
