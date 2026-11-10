@@ -276,6 +276,7 @@ model CashFlowItem {
   frequency                     CashFlowFrequency
   anchorDate                    DateTime                   @db.Date // reference occurrence date; for ONE_TIME this IS the date
   endDate                       DateTime?                  @db.Date // optional cutoff for recurring items
+  repeatsAnnually               Boolean                    @default(false) // when true the anchorDate→endDate window repeats every year
   isActive                      Boolean                    @default(true)
   note                          String?
   fiftyThirtyTwentyCategory     FiftyThirtyTwentyCategory? // override for the 50/30/20 bucket this item is assumed into (bill->NECESSITY, income->INCOME by default)

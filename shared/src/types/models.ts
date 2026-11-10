@@ -154,6 +154,7 @@ export interface CashFlowItem {
   frequency: CashFlowFrequency;
   anchorDate: string;
   endDate: string | null;
+  repeatsAnnually: boolean;
   isActive: boolean;
   note: string | null;
   fiftyThirtyTwentyCategory: FiftyThirtyTwentyCategory | null;

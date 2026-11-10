@@ -66,6 +66,7 @@ export async function createItem(userId: string, input: CreateCashFlowItemInput)
       frequency: input.frequency,
       anchorDate: parseUTCDateString(input.anchorDate),
       endDate: input.endDate ? parseUTCDateString(input.endDate) : null,
+      repeatsAnnually: input.repeatsAnnually ?? false,
       note: input.note ?? null,
     },
     include: { overrides: true },
@@ -84,6 +85,7 @@ export async function updateItem(userId: string, itemId: string, input: UpdateCa
   if (input.amount !== undefined) data.amount = input.amount;
   if (input.anchorDate !== undefined) data.anchorDate = parseUTCDateString(input.anchorDate);
   if (input.endDate !== undefined) data.endDate = input.endDate ? parseUTCDateString(input.endDate) : null;
+  if (input.repeatsAnnually !== undefined) data.repeatsAnnually = input.repeatsAnnually;
   if (input.isActive !== undefined) data.isActive = input.isActive;
   if (input.note !== undefined) data.note = input.note;
   if (input.fiftyThirtyTwentyCategory !== undefined) data.fiftyThirtyTwentyCategory = input.fiftyThirtyTwentyCategory;
@@ -254,6 +256,7 @@ export async function getForecast(userId: string, horizonMonths?: number) {
       frequency: item.frequency as CashFlowFrequencyKind,
       anchorDate: item.anchorDate,
       endDate: item.endDate,
+      repeatsAnnually: item.repeatsAnnually,
       isActive: item.isActive,
       overrides: overridesMap,
     };

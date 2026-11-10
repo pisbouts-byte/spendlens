@@ -10,6 +10,7 @@ export const CreateCashFlowItemSchema = z.object({
   frequency: z.nativeEnum(CashFlowFrequency),
   anchorDate: dateString,
   endDate: dateString.nullable().optional(),
+  repeatsAnnually: z.boolean().optional(),
   note: z.string().max(500).nullable().optional(),
 });
 
@@ -18,6 +19,7 @@ export const UpdateCashFlowItemSchema = z.object({
   amount: z.number().positive().max(999999999999).optional(),
   anchorDate: dateString.optional(),
   endDate: dateString.nullable().optional(),
+  repeatsAnnually: z.boolean().optional(),
   isActive: z.boolean().optional(),
   note: z.string().max(500).nullable().optional(),
   fiftyThirtyTwentyCategory: z.nativeEnum(FiftyThirtyTwentyCategory).nullable().optional(),

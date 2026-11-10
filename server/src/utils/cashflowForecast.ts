@@ -22,6 +22,7 @@ export interface CashFlowItemInput {
   frequency: CashFlowFrequencyKind;
   anchorDate: Date; // UTC-midnight
   endDate: Date | null; // UTC-midnight
+  repeatsAnnually: boolean;
   isActive: boolean;
   overrides: Map<string, CashFlowOverrideInput>; // keyed by periodKey
 }
@@ -138,43 +139,65 @@ function periodKeyFor(item: CashFlowItemInput, occ: Date): string {
   return `${y}-${m}`;
 }
 
-function generateOccurrences(item: CashFlowItemInput, asOfDate: Date, horizonEnd: Date): Date[] {
-  if (!item.isActive) return [];
-  const results: Date[] = [];
+function generateOccurrencesInWindow(item: CashFlowItemInput, windowAnchor: Date, windowEnd: Date | null, asOfDate: Date, horizonEnd: Date, results: Date[]): void {
   const asOfMs = asOfDate.getTime();
   const horizonMs = horizonEnd.getTime();
-  const endMs = item.endDate ? item.endDate.getTime() : null;
-
-  if (item.frequency === "ONE_TIME") {
-    const t = item.anchorDate.getTime();
-    if (t > asOfMs && t <= horizonMs) results.push(item.anchorDate);
-    return results;
-  }
+  const endMs = windowEnd ? windowEnd.getTime() : null;
 
   if (item.frequency === "WEEKLY" || item.frequency === "BIWEEKLY") {
     const stepMs = (item.frequency === "WEEKLY" ? 7 : 14) * 86400000;
-    let kStart = Math.floor((asOfMs - item.anchorDate.getTime()) / stepMs) - 1;
+    let kStart = Math.floor((asOfMs - windowAnchor.getTime()) / stepMs) - 1;
     if (kStart < 0) kStart = 0;
     for (let k = kStart; ; k++) {
-      const occ = new Date(item.anchorDate.getTime() + k * stepMs);
+      const occ = new Date(windowAnchor.getTime() + k * stepMs);
       if (occ.getTime() > horizonMs) break;
       if (endMs !== null && occ.getTime() > endMs) break;
       if (occ.getTime() > asOfMs) results.push(occ);
     }
-    return results;
+    return;
   }
 
   const stepMonths = MONTHLY_STEP[item.frequency] as number;
-  const anchorMonthIndex = item.anchorDate.getUTCFullYear() * 12 + item.anchorDate.getUTCMonth();
+  const anchorMonthIndex = windowAnchor.getUTCFullYear() * 12 + windowAnchor.getUTCMonth();
   const asOfMonthIndex = asOfDate.getUTCFullYear() * 12 + asOfDate.getUTCMonth();
   let kStart = Math.floor((asOfMonthIndex - anchorMonthIndex) / stepMonths) - 1;
   if (kStart < 0) kStart = 0;
   for (let k = kStart; ; k++) {
-    const occ = occurrenceForK(item.anchorDate, stepMonths, k);
+    const occ = occurrenceForK(windowAnchor, stepMonths, k);
     if (occ.getTime() > horizonMs) break;
     if (endMs !== null && occ.getTime() > endMs) break;
     if (occ.getTime() > asOfMs) results.push(occ);
   }
+}
+
+function generateOccurrences(item: CashFlowItemInput, asOfDate: Date, horizonEnd: Date): Date[] {
+  if (!item.isActive) return [];
+  const results: Date[] = [];
+
+  if (item.frequency === "ONE_TIME") {
+    const t = item.anchorDate.getTime();
+    const asOfMs = asOfDate.getTime();
+    const horizonMs = horizonEnd.getTime();
+    if (t > asOfMs && t <= horizonMs) results.push(item.anchorDate);
+    return results;
+  }
+
+  if (item.repeatsAnnually && item.endDate) {
+    // Repeat the anchorDate→endDate window every year.
+    // Shift both dates by whole years; preserve the window length in days.
+    const windowMs = item.endDate.getTime() - item.anchorDate.getTime();
+    const baseYear = item.anchorDate.getUTCFullYear();
+    const horizonYear = horizonEnd.getUTCFullYear();
+    for (let yr = baseYear; yr <= horizonYear + 1; yr++) {
+      const shiftedAnchor = new Date(Date.UTC(yr, item.anchorDate.getUTCMonth(), item.anchorDate.getUTCDate()));
+      const shiftedEnd = new Date(shiftedAnchor.getTime() + windowMs);
+      if (shiftedAnchor.getTime() > horizonEnd.getTime()) break;
+      generateOccurrencesInWindow(item, shiftedAnchor, shiftedEnd, asOfDate, horizonEnd, results);
+    }
+    return results;
+  }
+
+  generateOccurrencesInWindow(item, item.anchorDate, item.endDate, asOfDate, horizonEnd, results);
   return results;
 }
 

@@ -890,7 +890,7 @@ function ItemList({
                   <p className="text-sm text-gray-500">
                     {formatCurrency(item.amount)} · {FREQUENCY_LABELS[item.frequency]} · since{" "}
                     {formatDate(item.anchorDate)}
-                    {item.endDate ? ` until ${formatDate(item.endDate)}` : ""}
+                    {item.endDate ? ` until ${formatDate(item.endDate)}${item.repeatsAnnually ? " · repeats yearly" : ""}` : ""}
                   </p>
                   {item.overrides && item.overrides.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -966,6 +966,7 @@ function ItemFormModal({ type, editingItem, onClose, onSaved }: ItemFormModalPro
   const [anchorDate, setAnchorDate] = useState(editingItem?.anchorDate ?? todayDateString());
   const [hasEndDate, setHasEndDate] = useState(!!editingItem?.endDate);
   const [endDate, setEndDate] = useState(editingItem?.endDate ?? "");
+  const [repeatsAnnually, setRepeatsAnnually] = useState(editingItem?.repeatsAnnually ?? false);
   const [note, setNote] = useState(editingItem?.note ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -984,6 +985,7 @@ function ItemFormModal({ type, editingItem, onClose, onSaved }: ItemFormModalPro
           amount: amountNum,
           anchorDate,
           endDate: hasEndDate && endDate ? endDate : null,
+          repeatsAnnually: hasEndDate ? repeatsAnnually : false,
           note: note || null,
         };
         await cashflowApi.updateItem(editingItem.id, input);
@@ -996,6 +998,7 @@ function ItemFormModal({ type, editingItem, onClose, onSaved }: ItemFormModalPro
           frequency,
           anchorDate,
           endDate: frequency !== CashFlowFrequency.ONE_TIME && hasEndDate && endDate ? endDate : null,
+          repeatsAnnually: frequency !== CashFlowFrequency.ONE_TIME && hasEndDate ? repeatsAnnually : false,
           note: note || null,
         };
         await cashflowApi.createItem(input);
@@ -1079,12 +1082,22 @@ function ItemFormModal({ type, editingItem, onClose, onSaved }: ItemFormModalPro
               Ends on a specific date
             </label>
             {hasEndDate && (
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              />
+              <>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={repeatsAnnually}
+                    onChange={(e) => setRepeatsAnnually(e.target.checked)}
+                  />
+                  Repeats every year
+                </label>
+              </>
             )}
           </div>
         )}
